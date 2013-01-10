@@ -1,186 +1,198 @@
-/* Copyright (c) 2010: Michal Kottman */
-#include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/types.h>
+#include <linux/jiffies.h>
+#include <linux/async.h>
+#include <linux/suspend.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
-#include <linux/jiffies.h>
 #include <linux/sched.h>
 #include <asm/uaccess.h>
 #include <acpi/acpi.h>
 #include <linux/wait.h>
 #include <linux/kthread.h>
 
-MODULE_LICENSE("GPL");
+#include <acpi/acpi_bus.h>
+#include <acpi/acpi_drivers.h>
+#include <linux/power_supply.h>
 
-#define BUFFER_SIZE 256
+static const struct acpi_device_id battery_device_ids[] = {
+	{"PNP0C0A", 0},
+	{"", 0},
+};
 
-struct task_struct *ts;
+MODULE_DEVICE_TABLE(acpi, battery_device_ids);
 
-extern struct proc_dir_entry *acpi_root_dir;
-char result_buffer[BUFFER_SIZE];
-u8 temporary_buffer[BUFFER_SIZE];
+ACPI_MODULE_NAME("battcheck");
 
-size_t get_avail_bytes(void) {
-    return BUFFER_SIZE - strlen(result_buffer);
+struct acpi_battery {
+    struct acpi_device *device;
+    int state;
+    int present_rate;
+    int remaining_capacity;
+    int present_voltage;
+};
+
+struct acpi_offsets {
+	size_t offset;		/* offset inside struct acpi_sbs_battery */
+	u8 mode;		    /* int or string? */
+};
+
+static struct acpi_offsets info_offsets[] = {
+	{offsetof(struct acpi_battery, state), 0},
+	{offsetof(struct acpi_battery, present_rate), 0},
+	{offsetof(struct acpi_battery, remaining_capacity), 0},
+	{offsetof(struct acpi_battery, present_voltage), 0},
+};
+
+/*
+ * taken from: drivers/acpi/battery.c
+ */
+static int extract_package(struct acpi_battery *battery,
+			   union acpi_object *package,
+			   struct acpi_offsets *offsets, int num)
+{
+	int i;
+	union acpi_object *element;
+	if (package->type != ACPI_TYPE_PACKAGE)
+		return -EFAULT;
+	for (i = 0; i < num; ++i) {
+		if (package->package.count <= i)
+			return -EFAULT;
+		element = &package->package.elements[i];
+		if (offsets[i].mode) {
+			u8 *ptr = (u8 *)battery + offsets[i].offset;
+			if (element->type == ACPI_TYPE_STRING ||
+			    element->type == ACPI_TYPE_BUFFER)
+				strncpy(ptr, element->string.pointer, 32);
+			else if (element->type == ACPI_TYPE_INTEGER) {
+				strncpy(ptr, (u8 *)&element->integer.value,
+					sizeof(u64));
+				ptr[sizeof(u64)] = 0;
+			} else
+				*ptr = 0; /* don't have value */
+		} else {
+			int *x = (int *)((u8 *)battery + offsets[i].offset);
+			*x = (element->type == ACPI_TYPE_INTEGER) ?
+				element->integer.value : -1;
+		}
+	}
+	return 0;
 }
 
-char *get_buffer_end(void) {
-    return result_buffer + strlen(result_buffer);
-}
-
-/** Appends the contents of an acpi_object to the result buffer
-  @param result: An acpi object holding result data
-  @returns: 0 if the result could fully be saved, a higher value otherwise **/
-int acpi_result_to_string(union acpi_object *result) {
-    if (result->type == ACPI_TYPE_INTEGER) {
-        snprintf(get_buffer_end(), get_avail_bytes(),
-                "0x%x", (int)result->integer.value);
-    } else if (result->type == ACPI_TYPE_STRING) {
-        snprintf(get_buffer_end(), get_avail_bytes(),
-                "\"%*s\"", result->string.length, result->string.pointer);
-    } else if (result->type == ACPI_TYPE_BUFFER) {
-        int i;
-        // do not store more than data if it does not fit. The first element is
-        // just 4 chars, but there is also two bytes from the curly brackets
-        int show_values = min(result->buffer.length, get_avail_bytes() / 6);
-
-        sprintf(get_buffer_end(), "{");
-        for (i = 0; i < show_values; i++)
-            sprintf(get_buffer_end(), i == 0 ? "0x%02x" : ", 0x%02x", 
-                    result->buffer.pointer[i]);
-
-        if (result->buffer.length > show_values) {
-            // if data was truncated, show a trailing comma if there is space
-            snprintf(get_buffer_end(), get_avail_bytes(), ",");
-            return 1;
-        } else {
-            // in case show_values == 0, but the buffer is too small to hold
-            // more values (i.e. the buffer cannot have anything more than "{")
-            snprintf(get_buffer_end(), get_avail_bytes(), "}");
-        }
-    } else if (result->type == ACPI_TYPE_PACKAGE) {
-        int i;
-        sprintf(get_buffer_end(), "[");
-        for (i=0; i < result->package.count; i++) {
-            if (i > 0)
-                snprintf(get_buffer_end(), get_avail_bytes(), ", ");
-
-            // abort if there is no more space available
-            if (!get_avail_bytes() || 
-                    acpi_result_to_string(&result->package.elements[i]))
-                return 1;
-        }
-        snprintf(get_buffer_end(), get_avail_bytes(), "]");
-    } else {
-        snprintf(get_buffer_end(), get_avail_bytes(),
-                "Object type 0x%x\n", result->type);
-    }
-
-    // return 0 if there are still bytes available, 1 otherwise
-    return !get_avail_bytes();
-}
-
-/**
-  @param method   The full name of ACPI method to call
-  @param argc     The number of parameters
-  @param argv     A pre-allocated array of arguments of type acpi_object
-  */
-void do_battcheck(const char *method, int argc, union acpi_object *argv) {
-    acpi_status status;
-    acpi_handle handle;
-    struct acpi_object_list arg;
+static int acpi_battery_get_state(struct acpi_battery *battery)
+{
+    int result = 0;
+    acpi_status status = 0;
     struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
 
-    printk(KERN_INFO "battcheck: Calling %s\n", method);
+    status = acpi_evaluate_object(battery->device->handle, "_BST", NULL, &buffer);
 
-    // get the handle of the method, must be a fully qualified path
-    status = acpi_get_handle(NULL, (acpi_string) method, &handle);
+	if (ACPI_FAILURE(status)) {
+        printk(KERN_ERR "battcheck: Error evaluating _BST");
+		return -ENODEV;
+	}
 
-    if (ACPI_FAILURE(status)) {
-        snprintf(result_buffer, BUFFER_SIZE, 
-                "Error: %s", acpi_format_exception(status));
-        printk(KERN_ERR "battcheck: Cannot get handle: %s\n", result_buffer);
-        return;
-    }
+    result = extract_package(battery, buffer.pointer, 
+            info_offsets, ARRAY_SIZE(info_offsets));
 
-    // prepare parameters
-    arg.count = argc;
-    arg.pointer = argv;
-
-    // call the method
-    status = acpi_evaluate_object(handle, NULL, &arg, &buffer);
-    if (ACPI_FAILURE(status)) {
-        snprintf(result_buffer, BUFFER_SIZE, 
-                "Error: %s", acpi_format_exception(status));
-        printk(KERN_ERR "battcheck: Method call failed: %s\n", result_buffer);
-        return;
-    }
-
-    // reset the result buffer
-    *result_buffer = '\0';
-    acpi_result_to_string(buffer.pointer);
     kfree(buffer.pointer);
 
-    printk(KERN_INFO "battcheck: Call successful: %s\n", result_buffer);
+    printk(KERN_ERR "battcheck: %d | %d | %d | %d\n",
+            battery->state,
+            battery->present_rate,
+            battery->remaining_capacity,
+            battery->present_voltage
+          );
+
+    return result;
 }
 
-
-/** procfs 'call' read callback.  
-  Called when reading the content of /proc/battcheck
-  Returns the last call status: "not called" when no call was 
-  previously issued or "failed" if the call failed or "ok" if 
-  the call succeeded. **/
-int proc_read(char *page, char **s, off_t off, int c, int *eof, void *d) {
-    int len = 0;
-
-    if (off > 0) {
-        *eof = 1;
-        return 0;
-    }
-
-    len = strlen(result_buffer);
-    memcpy(page, result_buffer, len + 1);
-    strcpy(result_buffer, "not called");
-
-    return len;
-}
-
-int thread(void *data)
+static int acpi_battery_add(struct acpi_device *device)
 {
-    while(!kthread_should_stop())
-    {
-        do_battcheck("\\_SB_.BAT1._BST", 0, NULL);
+    printk(KERN_ERR "battcheck: Adding battery\n");
 
-        set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(HZ);
+    struct acpi_battery *battery = NULL;
+    acpi_handle handle;
+    acpi_status status = 0;
+
+    if (!device) return -EINVAL;
+
+    battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
+
+    if (!battery) return -ENOMEM;
+
+    battery->device = device;
+
+    status = acpi_get_handle(battery->device->handle, "_BST", &handle);
+
+	if (ACPI_FAILURE(status)) {
+        printk(KERN_ERR "battcheck: Cannot get handle: %s\n", acpi_format_exception(status));
+        return 1;
     }
 
-    return 1;
-}
+    int result = 0;
+    result = acpi_battery_get_state(battery);
 
-/** module initialization function */
-int __init init_battcheck(void) {
-
-    struct proc_dir_entry *proc_entry = create_proc_read_entry("battcheck", 0600, NULL, proc_read, NULL);
-
-    if (proc_entry == NULL) {
-        printk(KERN_ERR "battcheck: Couldn't create proc entry\n");
-        return -ENOMEM;
+    if (result) {
+        kfree(battery);
     }
 
-    strcpy(result_buffer, "not called");
-
-    printk(KERN_INFO "battcheck: Module loaded successfully\n");
-    ts=kthread_run(thread, NULL, "battcheck-thread");
+    return result;
 
     return 0;
 }
 
-void __exit unload_battcheck(void) {
-    remove_proc_entry("battcheck", NULL);
-    kthread_stop(ts);
+static int acpi_battery_remove(struct acpi_device *device, int type)
+{
+    printk(KERN_INFO "battcheck: battery removed\n");
+
+	struct acpi_battery *battery = NULL;
+
+	if (!device || !acpi_driver_data(device))
+		return -EINVAL;
+
+	battery = acpi_driver_data(device);
+	kfree(battery);
+	return 0;
+}
+
+static struct acpi_driver battcheck_driver = {
+    .name = "battcheck",
+    .class = "battery",
+    .ids = battery_device_ids,
+	.flags = ACPI_DRIVER_ALL_NOTIFY_EVENTS,
+    .ops = {
+        .add = acpi_battery_add,
+        .remove = acpi_battery_remove,
+    },
+};
+
+static void __init init_battcheck_async(void *unused, async_cookie_t cookie)
+{
+    if (acpi_bus_register_driver(&battcheck_driver) < 0)
+        printk(KERN_INFO "battcheck: Failed to register acpi driver\n");
+
+    return;
+}
+
+static int __init init_battcheck(void) 
+{
+    async_schedule(init_battcheck_async, NULL);
+    printk(KERN_INFO "battcheck: Module loaded successfully\n");
+    return 0;
+}
+
+static void __exit unload_battcheck(void) 
+{
+    acpi_bus_unregister_driver(&battcheck_driver);
     printk(KERN_INFO "battcheck: Module unloaded successfully\n");
 }
 
 module_init(init_battcheck);
 module_exit(unload_battcheck);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Max Thrun");
+MODULE_DESCRIPTION("Battery checker");
