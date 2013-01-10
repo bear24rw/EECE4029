@@ -12,6 +12,7 @@
 #include <acpi/acpi.h>
 #include <linux/wait.h>
 #include <linux/kthread.h>
+#include <linux/list.h>
 
 #include <acpi/acpi_bus.h>
 #include <acpi/acpi_drivers.h>
@@ -28,32 +29,28 @@ ACPI_MODULE_NAME("battcheck");
 
 struct acpi_battery {
     struct acpi_device *device;
+    int number;
     int state;
     int present_rate;
     int remaining_capacity;
     int present_voltage;
 };
 
-struct acpi_offsets {
-	size_t offset;		/* offset inside struct acpi_sbs_battery */
-	u8 mode;		    /* int or string? */
-};
-
-static struct acpi_offsets info_offsets[] = {
-	{offsetof(struct acpi_battery, state), 0},
-	{offsetof(struct acpi_battery, present_rate), 0},
-	{offsetof(struct acpi_battery, remaining_capacity), 0},
-	{offsetof(struct acpi_battery, present_voltage), 0},
+size_t info_offsets[] = {
+    offsetof(struct acpi_battery, state),
+    offsetof(struct acpi_battery, present_rate),
+    offsetof(struct acpi_battery, remaining_capacity),
+    offsetof(struct acpi_battery, present_voltage),
 };
 
 /*
- * taken from: drivers/acpi/battery.c
+ * modified from: drivers/acpi/battery.c
  */
 static int extract_package(struct acpi_battery *battery,
 			   union acpi_object *package,
-			   struct acpi_offsets *offsets, int num)
+			   size_t *offsets, int num)
 {
-	int i;
+    int i;
 	union acpi_object *element;
 	if (package->type != ACPI_TYPE_PACKAGE)
 		return -EFAULT;
@@ -61,22 +58,9 @@ static int extract_package(struct acpi_battery *battery,
 		if (package->package.count <= i)
 			return -EFAULT;
 		element = &package->package.elements[i];
-		if (offsets[i].mode) {
-			u8 *ptr = (u8 *)battery + offsets[i].offset;
-			if (element->type == ACPI_TYPE_STRING ||
-			    element->type == ACPI_TYPE_BUFFER)
-				strncpy(ptr, element->string.pointer, 32);
-			else if (element->type == ACPI_TYPE_INTEGER) {
-				strncpy(ptr, (u8 *)&element->integer.value,
-					sizeof(u64));
-				ptr[sizeof(u64)] = 0;
-			} else
-				*ptr = 0; /* don't have value */
-		} else {
-			int *x = (int *)((u8 *)battery + offsets[i].offset);
-			*x = (element->type == ACPI_TYPE_INTEGER) ?
-				element->integer.value : -1;
-		}
+        int *x = (int *)((u8 *)battery + offsets[i]);
+        *x = (element->type == ACPI_TYPE_INTEGER) ?
+            element->integer.value : -1;
 	}
 	return 0;
 }
@@ -99,20 +83,41 @@ static int acpi_battery_get_state(struct acpi_battery *battery)
 
     kfree(buffer.pointer);
 
-    printk(KERN_ERR "battcheck: %d | %d | %d | %d\n",
-            battery->state,
-            battery->present_rate,
-            battery->remaining_capacity,
-            battery->present_voltage
-          );
-
     return result;
 }
 
+int thread(void *data)
+{
+    struct acpi_battery *battery = (struct acpi_battery*)data;
+
+    while(!kthread_should_stop())
+    {
+
+        int result = 0;
+        result = acpi_battery_get_state(battery);
+       
+        printk(KERN_ERR "battcheck: [BAT%d] %5d | %5d | %5d | %5d\n",
+                battery->number,
+                battery->state,
+                battery->present_rate,
+                battery->remaining_capacity,
+                battery->present_voltage
+              );
+
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(HZ);
+    }
+
+    return 0;
+}
+
+struct task_struct *ts[2];
+
 static int acpi_battery_add(struct acpi_device *device)
 {
-    printk(KERN_ERR "battcheck: Adding battery\n");
+    printk(KERN_INFO "battcheck: Adding battery\n");
 
+    static int battery_count = 0;
     struct acpi_battery *battery = NULL;
     acpi_handle handle;
     acpi_status status = 0;
@@ -124,6 +129,7 @@ static int acpi_battery_add(struct acpi_device *device)
     if (!battery) return -ENOMEM;
 
     battery->device = device;
+    battery->number = battery_count;
 
     status = acpi_get_handle(battery->device->handle, "_BST", &handle);
 
@@ -132,14 +138,9 @@ static int acpi_battery_add(struct acpi_device *device)
         return 1;
     }
 
-    int result = 0;
-    result = acpi_battery_get_state(battery);
+    ts[battery_count] = kthread_run(thread, battery, "battcheck_thread");
 
-    if (result) {
-        kfree(battery);
-    }
-
-    return result;
+    battery_count++;
 
     return 0;
 }
@@ -186,6 +187,8 @@ static int __init init_battcheck(void)
 
 static void __exit unload_battcheck(void) 
 {
+    kthread_stop(ts[0]);
+    kthread_stop(ts[1]);
     acpi_bus_unregister_driver(&battcheck_driver);
     printk(KERN_INFO "battcheck: Module unloaded successfully\n");
 }
