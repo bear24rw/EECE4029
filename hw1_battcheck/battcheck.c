@@ -18,15 +18,6 @@
 #include <acpi/acpi_drivers.h>
 #include <linux/power_supply.h>
 
-static const struct acpi_device_id battery_device_ids[] = {
-    {"PNP0C0A", 0},
-    {"", 0},
-};
-
-MODULE_DEVICE_TABLE(acpi, battery_device_ids);
-
-ACPI_MODULE_NAME("battcheck");
-
 struct acpi_battery {
     int number;
     int state;
