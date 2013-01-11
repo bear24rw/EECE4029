@@ -24,8 +24,8 @@ size_t info_offsets[] = {
 struct task_struct *ts;
 
 /*
- * unpacks the acpi_object into the battery struct
- * modified from: drivers/acpi/battery.c
+ * Unpacks the acpi_object into the battery struct
+ * Modified from: drivers/acpi/battery.c
  */
 static int extract_package(struct acpi_battery *battery,
         union acpi_object *package,
@@ -48,7 +48,7 @@ static int extract_package(struct acpi_battery *battery,
 }
 
 /*
- * gets updated battery status (_BST) information
+ * Gets updated battery status (_BST) information
  */
 static int get_battery_status(struct acpi_battery *battery)
 {
@@ -71,17 +71,21 @@ static int get_battery_status(struct acpi_battery *battery)
     return result;
 }
 
-int thread(void *data)
+int check_thread(void *data)
 {
+    int result;
+
+    /* allocate a battery struct to use in the for_each loop */
     struct acpi_battery *battery = NULL;
     battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
 
+    /* continue until the module_exit function tells us to stop */
     while(!kthread_should_stop())
     {
+        /* loop through each battery */
         list_for_each_entry(battery, &acpi_battery_list.list, list) {
 
-            int result = 0;
-
+            /* get updated battery information */
             result = get_battery_status(battery);
 
             printk(KERN_ERR "battcheck: [%s] %5d | %5d | %5d | %5d\n",
@@ -94,6 +98,7 @@ int thread(void *data)
 
         }
 
+        /* delay */
         set_current_state(TASK_INTERRUPTIBLE);
         schedule_timeout(HZ);
     }
@@ -102,11 +107,10 @@ int thread(void *data)
 }
 
 /*
- * walk through the ACPI device tree starting at
- * the system bus (_SB_). for each device check
- * whether it has a battery status (_BST) entry.
- * if it does allocate a new battery struct and
- * add it the to battery_list linked list
+ * Walk through the ACPI device tree starting at the system bus (_SB_). 
+ * For each device check whether it has a battery status (_BST) entry.
+ * If it does allocate a new battery struct and add it to the 
+ * battery_list linked list
  */
 int find_batteries(void)
 {
@@ -172,6 +176,9 @@ int find_batteries(void)
     return 0;
 }
 
+/*
+ * Module entry point
+ */
 static int __init init_battcheck(void) 
 {
     /* set the head of our linked list to store the battery structs */
@@ -181,13 +188,16 @@ static int __init init_battcheck(void)
     find_batteries();
 
     /* start the thread that prints out battery status */
-    ts = kthread_run(thread, NULL, "battcheck_thread");
+    ts = kthread_run(check_thread, NULL, "battcheck_thread");
 
     printk(KERN_INFO "battcheck: Module loaded successfully\n");
 
     return 0;
 }
 
+/*
+ * Module exit point
+ */
 static void __exit exit_battcheck(void) 
 {
     struct acpi_battery *battery, *tmp;
