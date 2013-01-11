@@ -1,22 +1,6 @@
-#include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/init.h>
-#include <linux/types.h>
-#include <linux/jiffies.h>
-#include <linux/async.h>
-#include <linux/suspend.h>
-#include <linux/proc_fs.h>
-#include <linux/slab.h>
-#include <linux/sched.h>
-#include <asm/uaccess.h>
-#include <acpi/acpi.h>
-#include <linux/wait.h>
 #include <linux/kthread.h>
-#include <linux/list.h>
-
-#include <acpi/acpi_bus.h>
 #include <acpi/acpi_drivers.h>
-#include <linux/power_supply.h>
 
 struct acpi_battery {
     int number;
