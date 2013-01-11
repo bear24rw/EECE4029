@@ -24,6 +24,7 @@ size_t info_offsets[] = {
 struct task_struct *ts;
 
 /*
+ * unpacks the acpi_object into the battery struct
  * modified from: drivers/acpi/battery.c
  */
 static int extract_package(struct acpi_battery *battery,
@@ -46,7 +47,10 @@ static int extract_package(struct acpi_battery *battery,
     return 0;
 }
 
-static int acpi_battery_get_state(struct acpi_battery *battery)
+/*
+ * gets updated battery status (_BST) information
+ */
+static int get_battery_status(struct acpi_battery *battery)
 {
     int result = 0;
     acpi_status status = 0;
@@ -78,7 +82,7 @@ int thread(void *data)
 
             int result = 0;
 
-            result = acpi_battery_get_state(battery);
+            result = get_battery_status(battery);
 
             printk(KERN_ERR "battcheck: [%s] %5d | %5d | %5d | %5d\n",
                     (char*)(battery->name).pointer,
@@ -97,6 +101,13 @@ int thread(void *data)
     return 0;
 }
 
+/*
+ * walk through the ACPI device tree starting at
+ * the system bus (_SB_). for each device check
+ * whether it has a battery status (_BST) entry.
+ * if it does allocate a new battery struct and
+ * add it the to battery_list linked list
+ */
 int find_batteries(void)
 {
     struct acpi_battery *battery = NULL;
@@ -115,15 +126,14 @@ int find_batteries(void)
     }
 
     /*
-     * walk through all devices under the root node
+     * walk through all devices under the parent node
      * and look for devices that have a battery
      * status (_BST) entry
      */
     while(1) {
 
         /* get the next child under the parent node */
-        status = acpi_get_next_object(ACPI_TYPE_DEVICE,
-                phandle, chandle, &rethandle);
+        status = acpi_get_next_object(ACPI_TYPE_DEVICE, phandle, chandle, &rethandle);
 
         /* if there are no more devices left stop searching */
         if (status == AE_NOT_FOUND || rethandle == NULL)
@@ -135,7 +145,7 @@ int find_batteries(void)
         /* try to get a handle for _BST under this node */
         status = acpi_get_handle(chandle, "_BST", &rethandle);
 
-        /* add a new battery if we found a _BST entry*/
+        /* if we found a _BST entry add a new battery */
         if (ACPI_SUCCESS(status)) {
 
             /* allocate and zero out memory for the new battery */
@@ -178,7 +188,7 @@ static int __init init_battcheck(void)
     return 0;
 }
 
-static void __exit unload_battcheck(void) 
+static void __exit exit_battcheck(void) 
 {
     struct acpi_battery *battery, *tmp;
 
@@ -196,7 +206,7 @@ static void __exit unload_battcheck(void)
 }
 
 module_init(init_battcheck);
-module_exit(unload_battcheck);
+module_exit(exit_battcheck);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Max Thrun");
