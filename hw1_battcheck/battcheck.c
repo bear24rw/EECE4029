@@ -3,15 +3,13 @@
 #include <acpi/acpi_drivers.h>
 
 struct acpi_battery {
-    int number;
     int state;
     int present_rate;
     int remaining_capacity;
     int present_voltage;
-    acpi_handle handle;
-    struct acpi_device *device;
-    struct list_head list;
     struct acpi_buffer name;
+    struct list_head list;
+    acpi_handle handle;
 };
 
 struct acpi_battery acpi_battery_list;
