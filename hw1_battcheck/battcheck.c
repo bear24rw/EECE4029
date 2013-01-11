@@ -19,8 +19,8 @@
 #include <linux/power_supply.h>
 
 static const struct acpi_device_id battery_device_ids[] = {
-	{"PNP0C0A", 0},
-	{"", 0},
+    {"PNP0C0A", 0},
+    {"", 0},
 };
 
 MODULE_DEVICE_TABLE(acpi, battery_device_ids);
@@ -54,22 +54,22 @@ struct task_struct *ts;
  * modified from: drivers/acpi/battery.c
  */
 static int extract_package(struct acpi_battery *battery,
-			   union acpi_object *package,
-			   size_t *offsets, int num)
+        union acpi_object *package,
+        size_t *offsets, int num)
 {
     int i;
-	union acpi_object *element;
-	if (package->type != ACPI_TYPE_PACKAGE)
-		return -EFAULT;
-	for (i = 0; i < num; ++i) {
-		if (package->package.count <= i)
-			return -EFAULT;
-		element = &package->package.elements[i];
+    union acpi_object *element;
+    if (package->type != ACPI_TYPE_PACKAGE)
+        return -EFAULT;
+    for (i = 0; i < num; ++i) {
+        if (package->package.count <= i)
+            return -EFAULT;
+        element = &package->package.elements[i];
         int *x = (int *)((u8 *)battery + offsets[i]);
         *x = (element->type == ACPI_TYPE_INTEGER) ?
             element->integer.value : -1;
-	}
-	return 0;
+    }
+    return 0;
 }
 
 static int acpi_battery_get_state(struct acpi_battery *battery)
@@ -80,10 +80,10 @@ static int acpi_battery_get_state(struct acpi_battery *battery)
 
     status = acpi_evaluate_object(battery->handle, NULL, NULL, &buffer);
 
-	if (ACPI_FAILURE(status)) {
+    if (ACPI_FAILURE(status)) {
         printk(KERN_ERR "battcheck: Error evaluating _BST");
-		return -ENODEV;
-	}
+        return -ENODEV;
+    }
 
     result = extract_package(battery, buffer.pointer, 
             info_offsets, ARRAY_SIZE(info_offsets));
@@ -103,7 +103,7 @@ int thread(void *data)
         list_for_each_entry(battery, &acpi_battery_list.list, list) {
 
             int result = 0;
-            
+
             result = acpi_battery_get_state(battery);
 
             printk(KERN_ERR "battcheck: [%s] %5d | %5d | %5d | %5d\n",
@@ -160,7 +160,7 @@ int find_batteries(void)
 
         /* try to get a handle for _BST under this node */
         status = acpi_get_handle(chandle, "_BST", &rethandle);
-       
+
         /* add a new battery if we found a _BST entry*/
         if (ACPI_SUCCESS(status)) {
 
