@@ -31,6 +31,7 @@ static int extract_package(struct acpi_battery *battery,
         size_t *offsets, int num)
 {
     int i;
+    int *x;
     union acpi_object *element;
     if (package->type != ACPI_TYPE_PACKAGE)
         return -EFAULT;
@@ -38,7 +39,7 @@ static int extract_package(struct acpi_battery *battery,
         if (package->package.count <= i)
             return -EFAULT;
         element = &package->package.elements[i];
-        int *x = (int *)((u8 *)battery + offsets[i]);
+        x = (int *)((u8 *)battery + offsets[i]);
         *x = (element->type == ACPI_TYPE_INTEGER) ?
             element->integer.value : -1;
     }
