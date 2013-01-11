@@ -33,8 +33,10 @@ struct acpi_battery {
     int present_rate;
     int remaining_capacity;
     int present_voltage;
+    acpi_handle handle;
     struct acpi_device *device;
     struct list_head list;
+    struct acpi_buffer name;
 };
 
 struct acpi_battery acpi_battery_list;
@@ -76,7 +78,7 @@ static int acpi_battery_get_state(struct acpi_battery *battery)
     acpi_status status = 0;
     struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
 
-    status = acpi_evaluate_object(battery->device->handle, "_BST", NULL, &buffer);
+    status = acpi_evaluate_object(battery->handle, NULL, NULL, &buffer);
 
 	if (ACPI_FAILURE(status)) {
         printk(KERN_ERR "battcheck: Error evaluating _BST");
@@ -101,15 +103,17 @@ int thread(void *data)
         list_for_each_entry(battery, &acpi_battery_list.list, list) {
 
             int result = 0;
+            
             result = acpi_battery_get_state(battery);
 
-            printk(KERN_ERR "battcheck: [BAT%d] %5d | %5d | %5d | %5d\n",
-                    battery->number,
+            printk(KERN_ERR "battcheck: [%s] %5d | %5d | %5d | %5d\n",
+                    (char*)(battery->name).pointer,
                     battery->state,
                     battery->present_rate,
                     battery->remaining_capacity,
                     battery->present_voltage
                   );
+
         }
 
         set_current_state(TASK_INTERRUPTIBLE);
@@ -119,83 +123,84 @@ int thread(void *data)
     return 0;
 }
 
-
-static int acpi_battery_add(struct acpi_device *device)
+int find_batteries(void)
 {
-    printk(KERN_INFO "battcheck: Adding battery\n");
-
-    static int battery_count = 0;
     struct acpi_battery *battery = NULL;
-    acpi_handle handle;
-    acpi_status status = 0;
 
-    if (!device) return -EINVAL;
+    acpi_handle phandle;
+    acpi_handle chandle = NULL;
+    acpi_handle rethandle;
+    acpi_status status;
 
-    battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
+    /* get the handle for the system bus */
+    status = acpi_get_handle(NULL, "\\_SB_", &phandle);
 
-    if (!battery) return -ENOMEM;
-
-    battery->device = device;
-    battery->number = battery_count;
-
-    status = acpi_get_handle(battery->device->handle, "_BST", &handle);
-
-	if (ACPI_FAILURE(status)) {
+    if (ACPI_FAILURE(status)) {
         printk(KERN_ERR "battcheck: Cannot get handle: %s\n", acpi_format_exception(status));
-        return 1;
+        return -1;
     }
 
-    INIT_LIST_HEAD(&battery->list);
-    list_add_tail(&(battery->list), &(acpi_battery_list.list));
+    /*
+     * walk through all devices under the root node
+     * and look for devices that have a battery
+     * status (_BST) entry
+     */
+    while(1) {
 
+        /* get the next child under the parent node */
+        status = acpi_get_next_object(ACPI_TYPE_DEVICE,
+                phandle, chandle, &rethandle);
 
-    battery_count++;
+        /* if there are no more devices left stop searching */
+        if (status == AE_NOT_FOUND || rethandle == NULL)
+            break;
+
+        /* current child is now the old child */
+        chandle = rethandle;
+
+        /* try to get a handle for _BST under this node */
+        status = acpi_get_handle(chandle, "_BST", &rethandle);
+       
+        /* add a new battery if we found a _BST entry*/
+        if (ACPI_SUCCESS(status)) {
+
+            /* allocate and zero out memory for the new battery */
+            battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
+
+            if (!battery) return -ENOMEM;
+
+            /* set the handle for this battery */
+            battery->handle = rethandle;
+
+            /* get the battery name */
+            battery->name.length = ACPI_ALLOCATE_BUFFER;
+            battery->name.pointer = NULL;
+            acpi_get_name(chandle, ACPI_SINGLE_NAME, &(battery->name));
+
+            /* add it to the list */
+            INIT_LIST_HEAD(&battery->list);
+            list_add_tail(&(battery->list), &(acpi_battery_list.list));
+
+            printk(KERN_INFO "Found battery: %s\n", (char*)(battery->name).pointer);
+        }
+    }
 
     return 0;
 }
 
-static int acpi_battery_remove(struct acpi_device *device, int type)
-{
-    printk(KERN_INFO "battcheck: battery removed\n");
-
-	struct acpi_battery *battery = NULL;
-
-	if (!device || !acpi_driver_data(device))
-		return -EINVAL;
-
-	battery = acpi_driver_data(device);
-	kfree(battery);
-	return 0;
-}
-
-static struct acpi_driver battcheck_driver = {
-    .name = "battcheck",
-    .class = "battery",
-    .ids = battery_device_ids,
-	.flags = ACPI_DRIVER_ALL_NOTIFY_EVENTS,
-    .ops = {
-        .add = acpi_battery_add,
-        .remove = acpi_battery_remove,
-    },
-};
-
-static void __init init_battcheck_async(void *unused, async_cookie_t cookie)
-{
-    if (acpi_bus_register_driver(&battcheck_driver) < 0)
-        printk(KERN_INFO "battcheck: Failed to register acpi driver\n");
-
-    return;
-}
-
 static int __init init_battcheck(void) 
 {
-    async_schedule(init_battcheck_async, NULL);
-
+    /* set the head of our linked list to store the battery structs */
     INIT_LIST_HEAD(&acpi_battery_list.list); // LIST_HEAD(acpi_battery_list)
 
+    /* find all batteries and add them to the linked list */
+    find_batteries();
+
+    /* start the thread that prints out battery status */
     ts = kthread_run(thread, NULL, "battcheck_thread");
 
     printk(KERN_INFO "battcheck: Module loaded successfully\n");
+
     return 0;
 }
 
@@ -203,11 +208,12 @@ static void __exit unload_battcheck(void)
 {
     struct acpi_battery *battery, *tmp;
 
+    /* stop the print thread */
     kthread_stop(ts);
-    acpi_bus_unregister_driver(&battcheck_driver);
 
+    /* deallocate each battery struct in the linked list */
     list_for_each_entry_safe(battery, tmp, &acpi_battery_list.list, list) {
-        printk(KERN_INFO "freeing node %d\n", battery->number);
+        printk(KERN_INFO "Freeing battery: %s\n", (char*)(battery->name).pointer);
         list_del(&battery->list);
         kfree(battery);
     }
