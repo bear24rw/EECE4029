@@ -269,6 +269,7 @@ int find_batteries(void)
 {
     struct acpi_battery *battery = NULL;
 
+    struct acpi_device *device;
     acpi_handle phandle;
     acpi_handle chandle = NULL;
     acpi_handle rethandle;
@@ -299,11 +300,17 @@ int find_batteries(void)
         /* current child is now the old child */
         chandle = rethandle;
 
-        /* try to get a handle for _BST under this device */
-        status = acpi_get_handle(chandle, "_BST", &rethandle);
+        /* get device object for this handle */
+        acpi_bus_get_device(chandle, &device);
 
-        /* if we found a _BST entry the device is a battery */
-        if (ACPI_SUCCESS(status)) {
+        /* get the current status of the device */
+        if (acpi_bus_get_status(device)) {
+            printk(KERN_INFO "battcheck: Error evaluating _STA");
+            return -ENODEV;
+        }
+
+        /* we only want to check batteries that are present */
+        if (device->status.battery_present) {
 
             /* allocate and zero out memory for the new battery */
             battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
@@ -325,7 +332,7 @@ int find_batteries(void)
             INIT_LIST_HEAD(&battery->list);
             list_add_tail(&(battery->list), &(acpi_battery_list.list));
 
-            printk(KERN_INFO "Found battery: %s\n", (char*)(battery->name).pointer);
+            printk(KERN_INFO "Adding battery: %s\n", (char*)(battery->name).pointer);
         }
     }
 
