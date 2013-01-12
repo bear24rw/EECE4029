@@ -181,18 +181,23 @@ int find_batteries(void)
  */
 static int __init init_battcheck(void) 
 {
+    int status;
+
     /* set the head of our linked list to store the battery structs */
     INIT_LIST_HEAD(&acpi_battery_list.list); // LIST_HEAD(acpi_battery_list)
 
     /* find all batteries and add them to the linked list */
-    find_batteries();
+    status = find_batteries();
 
     /* start the thread that prints out battery status */
     ts = kthread_run(check_thread, NULL, "battcheck_thread");
 
-    printk(KERN_INFO "battcheck: Module loaded successfully\n");
+    if (status < 0)
+        printk(KERN_INFO "battcheck: Module did not loaded successfully\n");
+    else
+        printk(KERN_INFO "battcheck: Module loaded successfully\n");
 
-    return 0;
+    return status;
 }
 
 /*
