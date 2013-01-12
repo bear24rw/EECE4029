@@ -125,14 +125,14 @@ int find_batteries(void)
     status = acpi_get_handle(NULL, "\\_SB_", &phandle);
 
     if (ACPI_FAILURE(status)) {
-        printk(KERN_ERR "battcheck: Cannot get handle: %s\n", acpi_format_exception(status));
+        printk(KERN_ERR "battcheck: Cannot get system bus handle: %s\n", 
+                acpi_format_exception(status));
         return -1;
     }
 
     /*
-     * walk through all devices under the parent node
-     * and look for devices that have a battery
-     * status (_BST) entry
+     * Walk through all devices (children) under the system bus (parent) 
+     * and look for devices that have a battery status (_BST) entry
      */
     while(1) {
 
