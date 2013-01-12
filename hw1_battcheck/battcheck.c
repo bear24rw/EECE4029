@@ -29,10 +29,10 @@ struct acpi_battery {
     int design_capacity_low;
     int capacity_granularity_1;
     int capacity_granularity_2;
-	char model_number[32];
-	char serial_number[32];
-	char type[32];
-	char oem_info[32];
+    char model_number[32];
+    char serial_number[32];
+    char type[32];
+    char oem_info[32];
 
     /* used to detect changes */
     int last_state;
@@ -53,8 +53,8 @@ struct acpi_battery acpi_battery_list;
  * from: drivers/acpi/battery.c
  */
 struct acpi_offsets {
-	size_t offset;      /* offset inside struct acpi_battery */
-	u8 mode;		    /* int or string? */
+    size_t offset;      /* offset inside struct acpi_battery */
+    u8 mode;            /* int or string? */
 };
 
 /* _BST offsets */
@@ -67,19 +67,19 @@ static struct acpi_offsets bst_offsets[] = {
 
 /* _BIF offsets */
 static struct acpi_offsets bif_offsets[] = {
-	{offsetof(struct acpi_battery, power_unit), 0},
-	{offsetof(struct acpi_battery, design_capacity), 0},
-	{offsetof(struct acpi_battery, full_charge_capacity), 0},
-	{offsetof(struct acpi_battery, technology), 0},
-	{offsetof(struct acpi_battery, design_voltage), 0},
-	{offsetof(struct acpi_battery, design_capacity_warning), 0},
-	{offsetof(struct acpi_battery, design_capacity_low), 0},
-	{offsetof(struct acpi_battery, capacity_granularity_1), 0},
-	{offsetof(struct acpi_battery, capacity_granularity_2), 0},
-	{offsetof(struct acpi_battery, model_number), 1},
-	{offsetof(struct acpi_battery, serial_number), 1},
-	{offsetof(struct acpi_battery, type), 1},
-	{offsetof(struct acpi_battery, oem_info), 1},
+    {offsetof(struct acpi_battery, power_unit), 0},
+    {offsetof(struct acpi_battery, design_capacity), 0},
+    {offsetof(struct acpi_battery, full_charge_capacity), 0},
+    {offsetof(struct acpi_battery, technology), 0},
+    {offsetof(struct acpi_battery, design_voltage), 0},
+    {offsetof(struct acpi_battery, design_capacity_warning), 0},
+    {offsetof(struct acpi_battery, design_capacity_low), 0},
+    {offsetof(struct acpi_battery, capacity_granularity_1), 0},
+    {offsetof(struct acpi_battery, capacity_granularity_2), 0},
+    {offsetof(struct acpi_battery, model_number), 1},
+    {offsetof(struct acpi_battery, serial_number), 1},
+    {offsetof(struct acpi_battery, type), 1},
+    {offsetof(struct acpi_battery, oem_info), 1},
 };
 
 /* kthread id */
