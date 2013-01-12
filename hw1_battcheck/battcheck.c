@@ -2,6 +2,10 @@
 #include <linux/kthread.h>
 #include <acpi/acpi_drivers.h>
 
+/* _BST 'state' entry bit fields */
+#define STATE_DISCHARGING   (1 << 0)
+#define STATE_CHARGING      (1 << 1)
+
 /*
  * For each battery we keep a struct containing
  * various control method results as well as
@@ -30,6 +34,10 @@ struct acpi_battery {
 	char type[32];
 	char oem_info[32];
 
+    /* used to detect changes */
+    int last_state;
+    int last_remaining_capacity;
+
     acpi_handle handle;
     struct acpi_buffer name;
     struct list_head list;
@@ -39,7 +47,7 @@ struct acpi_battery {
 struct acpi_battery acpi_battery_list;
 
 /*
- * When extracting the control method object we need to
+ * When extracting a control method object we need to
  * be able to lookup where to put the results in our
  * acpi_battery struct. The following tables are modified
  * from: drivers/acpi/battery.c
@@ -74,6 +82,7 @@ static struct acpi_offsets bif_offsets[] = {
 	{offsetof(struct acpi_battery, oem_info), 1},
 };
 
+/* kthread id */
 struct task_struct *ts;
 
 /*
@@ -113,7 +122,7 @@ static int extract_package(struct acpi_battery *battery,
 }
 
 /*
- * Performs a control method and stores the result into the battery sturct
+ * Evaluates a control method and stores the result into the battery struct
  */
 static int get_battery_control_method(struct acpi_battery *battery, const char *method, 
                                         struct acpi_offsets *offsets, size_t num_offsets)
@@ -124,10 +133,10 @@ static int get_battery_control_method(struct acpi_battery *battery, const char *
     struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
 
     /* get method handle */
-    status = acpi_get_handle(battery->handle, "_BST", &handle);
+    status = acpi_get_handle(battery->handle, (acpi_string)method, &handle);
 
     if (ACPI_FAILURE(status)) {
-        printk(KERN_ERR "battcheck: Error get _BST handle\n");
+        printk(KERN_ERR "battcheck: Error get handle\n");
         return -ENODEV;
     }
 
@@ -135,7 +144,7 @@ static int get_battery_control_method(struct acpi_battery *battery, const char *
     status = acpi_evaluate_object(handle, NULL, NULL, &buffer);
 
     if (ACPI_FAILURE(status)) {
-        printk(KERN_ERR "battcheck: Error evaluating _BST\n");
+        printk(KERN_ERR "battcheck: Error evaluating\n");
         return -ENODEV;
     }
 
@@ -160,6 +169,7 @@ static int get_battery_control_method(struct acpi_battery *battery, const char *
 int check_thread(void *data)
 {
     int result;
+    float delay;
 
     /* allocate a battery struct to use in the for_each loop */
     struct acpi_battery *battery = NULL;
@@ -168,25 +178,82 @@ int check_thread(void *data)
     /* continue until the module_exit function tells us to stop */
     while(!kthread_should_stop())
     {
+        /* delay for 1 HZ unless overwritten */
+        delay = 1;
+
         /* loop through each battery */
         list_for_each_entry(battery, &acpi_battery_list.list, list) {
 
             /* get updated battery information */
             result = get_battery_control_method(battery, "_BST", bst_offsets, ARRAY_SIZE(bst_offsets));
 
-            printk(KERN_ERR "battcheck: [%s] %5d | %5d | %5d | %5d\n",
+            /*
+             * 1) if battery is currently discharging but it wasn't last time then
+             * it has 'begun to discharge'
+             */
+            if ((battery->state & STATE_DISCHARGING) &&
+                (battery->state != battery->last_state))
+            {
+                printk(KERN_INFO "battcheck: [%s] Battery has begun to discharge\n", (char*)(battery->name).pointer);
+            }
+
+            /*
+             * 2) if battery is currently charging but it wasn't last time then
+             * it has 'begun to charge'
+             */
+            if ((battery->state & STATE_CHARGING) &&
+                (battery->state != battery->last_state))
+            {
+                printk(KERN_INFO "battcheck: [%s] Battery has begun to charge\n", (char*)(battery->name).pointer);
+            }
+
+            /*
+             * 3) if battery was charging but now it is not and the capacity is
+             * greater than the last 'full' capacity then we just 'reached full charge'
+             */
+            if ((battery->last_state & STATE_CHARGING) &&
+                !(battery->state & STATE_CHARGING) &&
+                (battery->remaining_capacity >= battery->full_charge_capacity))
+            {
+                printk(KERN_INFO "battcheck: [%s] Battery fully charged\n", (char*)(battery->name).pointer);
+            }
+
+            /*
+             * 4) if current capacity is less than 'warning' but it was higher before
+             * then the battery has 'become low'
+             */
+            if ((battery->remaining_capacity <= battery->design_capacity_warning) &&
+                (battery->last_remaining_capacity > battery->design_capacity_warning))
+            {
+                printk(KERN_INFO "battcheck: [%s] Battery is low\n", (char*)(battery->name).pointer);
+            }
+
+            /*
+             * 5) if current capacity is less than 'low' it has 'become crital'
+             * report every 30 seconds
+             */
+            if (battery->remaining_capacity <= battery->design_capacity_low) {
+                delay = 0.5;
+                printk(KERN_INFO "battcheck: [%s] Battery is critical\n", (char*)(battery->name).pointer);
+            }
+
+            printk(KERN_ERR "battcheck: [%s] state: %5d | remaining: %5d | full: %5d | warn: %5d | low: %5d\n",
                     (char*)(battery->name).pointer,
                     battery->state,
-                    battery->present_rate,
                     battery->remaining_capacity,
-                    battery->present_voltage
+                    battery->full_charge_capacity,
+                    battery->design_capacity_warning,
+                    battery->design_capacity_low
                   );
 
+            /* keep track of the last state so we can detect changes */
+            battery->last_state = battery->state;
+            battery->last_remaining_capacity = battery->remaining_capacity;
         }
 
         /* delay */
         set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(HZ);
+        schedule_timeout(delay*HZ);
     }
 
     return 0;
@@ -232,10 +299,10 @@ int find_batteries(void)
         /* current child is now the old child */
         chandle = rethandle;
 
-        /* try to get a handle for _BST under this node */
+        /* try to get a handle for _BST under this device */
         status = acpi_get_handle(chandle, "_BST", &rethandle);
 
-        /* if we found a _BST entry add a new battery */
+        /* if we found a _BST entry the device is a battery */
         if (ACPI_SUCCESS(status)) {
 
             /* allocate and zero out memory for the new battery */
