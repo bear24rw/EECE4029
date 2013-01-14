@@ -281,11 +281,11 @@ int read_proc(char *buf, char **start, off_t offset, int buf_length, int *eof, v
         battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
 
         /* clear out the buffer and make sure there is a NULL at the end */
-        sprintf(buf, "|");
+        sprintf(buf, " | ");
 
         /* loop through each battery and add it to the string */
         list_for_each_entry(battery, &acpi_battery_list.list, list) {
-            sprintf(buf, "%s%s:%d|", buf, (char*)(battery->name).pointer, battery->percent);
+            sprintf(buf, "%s%s: %d%% | ", buf, (char*)(battery->name).pointer, battery->percent);
         }
 
         /* add a new line to the end */
