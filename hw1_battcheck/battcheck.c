@@ -37,6 +37,7 @@ struct acpi_battery {
     /* used to detect changes */
     int last_state;
     int last_remaining_capacity;
+    int percent;
 
     acpi_handle handle;
     struct acpi_buffer name;
@@ -187,6 +188,9 @@ int check_thread(void *data)
             /* get updated battery information */
             result = get_battery_control_method(battery, "_BST", bst_offsets, ARRAY_SIZE(bst_offsets));
 
+            /* calculate percent remaining */
+            battery->percent = ((float)battery->remaining_capacity / (float)battery->full_charge_capacity) * 100;
+
             /*
              * 1) if battery is currently discharging but it wasn't last time then
              * it has 'begun to discharge'
@@ -237,10 +241,11 @@ int check_thread(void *data)
                 printk(KERN_INFO "battcheck: [%s] Battery is critical\n", (char*)(battery->name).pointer);
             }
 
-            printk(KERN_ERR "battcheck: [%s] state: %5d | remaining: %5d | full: %5d | warn: %5d | low: %5d\n",
+            printk(KERN_INFO "battcheck: [%s] state: %5d | remaining: %5d (%d%%) | full: %5d | warn: %5d | low: %5d\n",
                     (char*)(battery->name).pointer,
                     battery->state,
                     battery->remaining_capacity,
+                    battery->percent,
                     battery->full_charge_capacity,
                     battery->design_capacity_warning,
                     battery->design_capacity_low
