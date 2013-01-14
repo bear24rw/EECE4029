@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
+#include <linux/proc_fs.h>
 #include <acpi/acpi_drivers.h>
 
 /* _BST 'state' entry bit fields */
@@ -265,6 +266,40 @@ int check_thread(void *data)
 }
 
 /*
+ * Callback function for "/proc/battcheck". Loop through all the batteries
+ * and output their percent remaining delimited by a pipe character
+ */
+int read_proc(char *buf, char **start, off_t offset, int buf_length, int *eof, void *data) {
+
+    int len = 0;
+
+    /* check to make sure this is the first (and only) time through */
+    if (offset == 0) {
+
+        /* allocate a battery struct to use in the for_each loop */
+        struct acpi_battery *battery = NULL;
+        battery = kzalloc(sizeof(struct acpi_battery), GFP_KERNEL);
+
+        /* clear out the buffer and make sure there is a NULL at the end */
+        sprintf(buf, "|");
+
+        /* loop through each battery and add it to the string */
+        list_for_each_entry(battery, &acpi_battery_list.list, list) {
+            sprintf(buf, "%s%s:%d|", buf, (char*)(battery->name).pointer, battery->percent);
+        }
+
+        /* add a new line to the end */
+        len = sprintf(buf, "%s\n", buf);
+
+    } else {
+        /* return length 0 to indicate we are finished */
+        len = 0;
+    }
+
+    return len;
+}
+
+/*
  * Walk through the ACPI device tree starting at the system bus (_SB_). 
  * For each device check whether it has a battery status (_BST) entry.
  * If it does allocate a new battery struct and add it to the 
@@ -362,6 +397,9 @@ static int __init init_battcheck(void)
         return status;
     }
 
+    /* create an entry in proc to output percent remaining status */
+    create_proc_read_entry("battcheck", 0, NULL, read_proc, NULL);
+
     /* start the thread that prints out battery status */
     ts = kthread_run(check_thread, NULL, "battcheck_thread");
 
@@ -379,6 +417,9 @@ static void __exit exit_battcheck(void)
 
     /* stop the print thread */
     kthread_stop(ts);
+
+    /* remove the proc entry */
+    remove_proc_entry("battcheck", NULL);
 
     /* deallocate each battery struct in the linked list */
     list_for_each_entry_safe(battery, tmp, &acpi_battery_list.list, list) {
