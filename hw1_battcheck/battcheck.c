@@ -1,3 +1,58 @@
+/*
+ * Copyright (C) 2013 Max Thrun
+ *
+ * EECE4029 - Introduction to Operating Systems
+ * Assignment 1 - Battery Status Monitor
+ *
+ * The purpose of this module is to implement a battery status monitor that
+ * periodically checks the state of the battery through ACPI calls and reports
+ * the following events:
+ *
+ *      1) The battery begins to discharge
+ *      2) When it has begun to charge
+ *      3) When it has reached full charge
+ *      4) When the battery level has become low (only one report)
+ *      5) When the battery level becomes critical (report every 30 seconds)
+ *
+ * Being that some laptops have multiple batteries the best solution is to
+ * auto-detect all batteries in the system and monitor each one. The
+ * 'find_batteries' function walks the system bus ACPI tree (\_SB_) and checks
+ * each device it finds for the 'battery_present' status flag. If this flag is
+ * found a new battery structure (acpi_battery) is allocated and added to a
+ * linked-list. The battery name and static Battery Information (_BIF) are
+ * retrieved are stored along with the acpi_handle for the device.
+ *
+ * The 50 point "use an infinite loop" challenge is solved by using a kernel
+ * thread.  After the 'find_batteries' routine is finished the module init
+ * function spawns a thread for the 'check_thread' function. The 'check_thread'
+ * function drops into an infinite loop which continues until the thread is
+ * killed during module unloading. Each loop the battery linked-list is
+ * traversed and for each battery in the list a call to
+ * 'get_battery_control_method' is made passing the "_BST" method as an
+ * argument. The 'get_battery_control_method' updates the battery struct with
+ * new status information. A series of conditions are checked to see if any of
+ * the 5 events listed above are have occurred in which case a message
+ * reporting the event is printed to KERN_INFO. The loop then delays using a
+ * call to 'schedule_timeout'.
+ *
+ * The 10 point "desktop battery widget" challenge is solved by creating a
+ * /proc/battcheck entry which outputs the name and percent capacity of each
+ * battery. All this information is outputted on a single line and is delimited
+ * by a pipe (|) character for easy parsing in userspace. As an example, a
+ * battery monitor widget was created for the window manager AwesomeWM. A
+ * screen shot showing it in action is included with this project. The widget
+ * code can be found in this commit:
+ *
+ * https://github.com/bear24rw/dotfiles/commit/b9d588bd1e00499db8a04e63b16551acce6b0406
+ *
+ * Additionally a module parameter called 'verbose' can be set which enables
+ * verbose printing to KERN_INFO during each update loop. To load the module
+ * with verbose printing enabled:
+ *
+ *      % sudo insmod battcheck.ko verbose=1
+ *
+ */
+
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/proc_fs.h>
@@ -93,7 +148,7 @@ static struct acpi_offsets bif_offsets[] = {
 struct task_struct *ts;
 
 /*
- * Unpacks the acpi_object into the battery struct
+ * Unpacks an acpi_object into the battery struct at the given offets
  * Taken from: drivers/acpi/battery.c
  */
 static int extract_package(struct acpi_battery *battery,
@@ -168,9 +223,9 @@ static int get_battery_control_method(struct acpi_battery *battery, const char *
  * Monitor battery status periodically (default 1 second)
  * and report the following conditions:
  * 1) the battery begins to discharge
- * 2) when it has begun to charge or 
- * 3) when it has reached full charge 
- * 4) when the battery level has become low (only one report) 
+ * 2) when it has begun to charge
+ * 3) when it has reached full charge
+ * 4) when the battery level has become low (only one report)
  * 5) when the battery level becomes critical (report every 30 seconds)
  */
 int check_thread(void *data)
