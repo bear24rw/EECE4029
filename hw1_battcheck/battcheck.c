@@ -1,7 +1,12 @@
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/proc_fs.h>
+#include <linux/moduleparam.h>
 #include <acpi/acpi_drivers.h>
+
+int verbose = 0;
+module_param(verbose, int, 0);
+MODULE_PARM_DESC(verbose, "Verbose printing to KERN_INFO");
 
 /* _BST 'state' entry bit fields */
 #define STATE_DISCHARGING   (1 << 0)
@@ -242,15 +247,17 @@ int check_thread(void *data)
                 printk(KERN_INFO "battcheck: [%s] Battery is critical\n", (char*)(battery->name).pointer);
             }
 
-            printk(KERN_INFO "battcheck: [%s] state: %5d | remaining: %5d (%d%%) | full: %5d | warn: %5d | low: %5d\n",
-                    (char*)(battery->name).pointer,
-                    battery->state,
-                    battery->remaining_capacity,
-                    battery->percent,
-                    battery->full_charge_capacity,
-                    battery->design_capacity_warning,
-                    battery->design_capacity_low
-                  );
+            if (verbose) {
+                printk(KERN_INFO "battcheck: [%s] state: %5d | remaining: %5d (%d%%) | full: %5d | warn: %5d | low: %5d\n",
+                        (char*)(battery->name).pointer,
+                        battery->state,
+                        battery->remaining_capacity,
+                        battery->percent,
+                        battery->full_charge_capacity,
+                        battery->design_capacity_warning,
+                        battery->design_capacity_low
+                      );
+            }
 
             /* keep track of the last state so we can detect changes */
             battery->last_state = battery->state;
