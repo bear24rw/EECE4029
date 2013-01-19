@@ -231,7 +231,7 @@ static int get_battery_control_method(struct acpi_battery *battery, const char *
 int check_thread(void *data)
 {
     int result;
-    float delay;
+    int delay;
 
     /* allocate a battery struct to use in the for_each loop */
     struct acpi_battery *battery = NULL;
@@ -249,7 +249,7 @@ int check_thread(void *data)
             /* get updated battery information */
             result = get_battery_control_method(battery, "_BST", bst_offsets, ARRAY_SIZE(bst_offsets));
 
-            /* calculate percent remaining (using only integer math)*/
+            /* calculate percent remaining (using only integer math) */
             battery->percent = (battery->remaining_capacity * 200 + battery->full_charge_capacity) / (battery->full_charge_capacity * 2);
 
             /*
@@ -298,7 +298,7 @@ int check_thread(void *data)
              * report every 30 seconds
              */
             if (battery->remaining_capacity <= battery->design_capacity_low) {
-                delay = 0.5;
+                delay = 2;
                 printk(KERN_INFO "battcheck: [%s] Battery is critical\n", (char*)(battery->name).pointer);
             }
 
@@ -321,7 +321,7 @@ int check_thread(void *data)
 
         /* delay */
         set_current_state(TASK_INTERRUPTIBLE);
-        schedule_timeout(delay*HZ);
+        schedule_timeout(HZ/delay);
     }
 
     return 0;
