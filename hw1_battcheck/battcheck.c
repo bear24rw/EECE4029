@@ -249,8 +249,8 @@ int check_thread(void *data)
             /* get updated battery information */
             result = get_battery_control_method(battery, "_BST", bst_offsets, ARRAY_SIZE(bst_offsets));
 
-            /* calculate percent remaining */
-            battery->percent = ((float)battery->remaining_capacity / (float)battery->full_charge_capacity) * 100;
+            /* calculate percent remaining (using only integer math)*/
+            battery->percent = (battery->remaining_capacity * 200 + battery->full_charge_capacity) / (battery->full_charge_capacity * 2);
 
             /*
              * 1) if battery is currently discharging but it wasn't last time then
