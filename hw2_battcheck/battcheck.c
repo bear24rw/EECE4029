@@ -2,7 +2,7 @@
  * Copyright (C) 2013 Max Thrun
  *
  * EECE4029 - Introduction to Operating Systems
- * Assignment 1 - Battery Status Monitor
+ * Assignment 2 - Battery Status Monitor
  *
  * The purpose of this module is to implement a battery status monitor that
  * periodically checks the state of the battery through ACPI calls and reports
