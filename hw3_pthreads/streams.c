@@ -26,6 +26,16 @@
 #include <unistd.h>
 #include "queue_a.h"
 
+pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
+
+#define tprintf(...)    { \
+    gettimeofday(&tv, NULL); \
+    pthread_mutex_lock(&print_lock); \
+    printf("%ld\t", tv.tv_sec*1000000+tv.tv_usec); \
+    printf(__VA_ARGS__); \
+    pthread_mutex_unlock(&print_lock); \
+}
+
 #define BUFFER_SIZE 5
 int idcnt = 1;
 
@@ -86,17 +96,18 @@ void put(void *stream, void *value) {
 
 /* Put 1,2,3,4,5... into the self stream */
 void *successor (void *streams) {
+    struct timeval tv;
     Stream *self = ((Args*)streams)->self;
     int id = ((Args*)streams)->self->id;
     int i, *value;
 
     for (i=1 ; ; i++) {
         /* sleep(1); */
-        printf("Successor(%d): sending %d\n", id, i);
+        tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
         put(self, (void*)value);
-        printf("Successor(%d): sent %d, buf_sz=%d\n",
+        tprintf("Successor(%d): sent %d, buf_sz=%d\n",
                 id, i, nelem(&self->buffer));
     }
     pthread_exit(NULL);
@@ -105,16 +116,17 @@ void *successor (void *streams) {
 /* multiply all tokens from the self stream by (int)self->args and insert
    the resulting tokens into the self stream */
 void *times (void *streams) {
+    struct timeval tv;
     Stream *self = ((Args*)streams)->self;
     Stream *prod = ((Args*)streams)->prod;
     int *value;
     void *in;
 
-    printf("Times(%d) connected to Successor (%d)\n", self->id, prod->id);
+    tprintf("Times(%d) connected to Successor (%d)\n", self->id, prod->id);
     while (true) {
         in = get(prod);
 
-        printf("\t\tTimes(%d): got %d from Successor %d\n",
+        tprintf("\t\tTimes(%d): got %d from Successor %d\n",
                 self->id, *(int*)in, prod->id);
 
         value = (int*)malloc(sizeof(int));
@@ -122,7 +134,7 @@ void *times (void *streams) {
         free(in);
         put(self, (void*)value);
 
-        printf("\t\tTimes(%d): sent %d buf_sz=%d\n",
+        tprintf("\t\tTimes(%d): sent %d buf_sz=%d\n",
                 self->id, *value, nelem(&self->buffer));
     }
     pthread_exit(NULL);
@@ -133,6 +145,7 @@ ex: stream 1:  3,6,9,12,15,18...  stream 2: 5,10,15,20,25,30...
 output stream: 3,5,6,9,10,12,15,15,18...
 */
 void *merge (void *streams) {
+    struct timeval tv;
     Stream *self = ((Args*)streams)->self;
     Stream *s1 = ((Args*)streams)->prod;
     Stream *s2 = (((Args*)streams)->prod)->next;
@@ -143,12 +156,12 @@ void *merge (void *streams) {
         if (*(int*)a < *(int*)b) {
             put(self, a);
             a = get(s1);
-            printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
+            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
                     self->id, *(int*)a, s1->id, nelem(&self->buffer));
         } else {
             put(self, b);
             b = get(s2);
-            printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
+            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
                     self->id, *(int*)b, s2->id, nelem(&self->buffer));
         }
     }
@@ -157,13 +170,14 @@ void *merge (void *streams) {
 
 /* Final consumer in the network */
 void *consumer (void *streams) {
+    struct timeval tv;
     Stream *prod = ((Args*)streams)->prod;
     int i;
     void *value;
 
     for (i=0 ; i < 10 ; i++) {
         value = get(prod); 
-        printf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
+        tprintf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
         free(value);
     }
 
@@ -198,6 +212,9 @@ int main () {
     Stream suc1, suc2, tms1, tms2, mrg;
     Args suc1_args, suc2_args, tms1_args, tms2_args, mrg_args, cons_args;
     pthread_attr_t attr;
+
+    /* thread safe print mutex lock */
+    pthread_mutex_init(&print_lock, NULL);
 
     init_stream(&suc1_args, &suc1, NULL);   /* initialize a successor stream */
 
