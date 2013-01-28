@@ -1,11 +1,11 @@
 /* 07-prod-cons.c
 
-   Producer-consumer co-routining.  There are five producers and four 
-   consumers.  Two successors put consecutive numbers into their respective 
+   Producer-consumer co-routining.  There are five producers and four
+   consumers.  Two successors put consecutive numbers into their respective
    streams.  Two times consumers multiply all consumed numbers by 5 and 7
    respectively and put the results into their streams.  A merge consumer
-   merges the two stream created by the times producers.  A consumer prints 
-   tokens from the merge stream.  This  illustrates that producer-consumer 
+   merges the two stream created by the times producers.  A consumer prints
+   tokens from the merge stream.  This  illustrates that producer-consumer
    relationships can be formed into complex networks.
 
    Each stream has a buffer of size 5 - producers can put up to 5 numbers
@@ -32,7 +32,7 @@ int idcnt = 1;
 /* One of these per stream.
    Holds:  the mutex lock and notifier condition variables
            a buffer of tokens taken from a producer
-           a structure with information regarding the processing of tokens 
+           a structure with information regarding the processing of tokens
            an identity
 */
 typedef struct stream_struct {
@@ -56,7 +56,7 @@ void *get(void *stream) {
    queue *q = &((Stream*)stream)->buffer;
    pthread_mutex_t *lock = &((Stream*)stream)->lock;
    pthread_cond_t *notifier = &((Stream*)stream)->notifier;
-   
+
    pthread_mutex_lock(lock);    /* lock other threads out of this section    */
    if (isEmpty(q))              /* if nothing in the buffer, wait and open   */
       pthread_cond_wait(notifier, lock);     /* the section to other threads */
@@ -73,7 +73,7 @@ void put(void *stream, void *value) {
    queue *q = &((Stream*)stream)->buffer;
    pthread_mutex_t *lock = &((Stream*)stream)->lock;
    pthread_cond_t *notifier = &((Stream*)stream)->notifier;
-   
+
    pthread_mutex_lock(lock);      /* lock the section */
    if (nelem(q) >= BUFFER_SIZE)   /* if buffer is full, cause the thread to */
       pthread_cond_wait(notifier, lock);  /* wait - unlock the section      */
@@ -89,7 +89,7 @@ void *successor (void *streams) {
    Stream *self = ((Args*)streams)->self;
    int id = ((Args*)streams)->self->id;
    int i, *value;
-   
+
    for (i=1 ; ; i++) {
       /* sleep(1); */
       printf("Successor(%d): sending %d\n", id, i);
@@ -109,7 +109,7 @@ void *times (void *streams) {
    Stream *prod = ((Args*)streams)->prod;
    int *value;
    void *in;
-   
+
    printf("Times(%d) connected to Successor (%d)\n", self->id, prod->id);
    while (true) {
       in = get(prod);
@@ -143,12 +143,12 @@ void *merge (void *streams) {
       if (*(int*)a < *(int*)b) {
          put(self, a);
          a = get(s1);
-         printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n", 
+         printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
                 self->id, *(int*)a, s1->id, nelem(&self->buffer));
       } else {
          put(self, b);
          b = get(s2);
-         printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n", 
+         printf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
                 self->id, *(int*)b, s2->id, nelem(&self->buffer));
       }
    }
@@ -160,13 +160,13 @@ void *consumer (void *streams) {
    Stream *prod = ((Args*)streams)->prod;
    int i;
    void *value;
-   
+
    for (i=0 ; i < 10 ; i++) {
       value = get(prod); 
       printf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
       free(value);
    }
-   
+
    pthread_exit(NULL);
 }
 
@@ -188,7 +188,7 @@ void init_stream (Args *args, Stream *self, void *data) {
 void kill_stream(Stream *stream) { destroy_queue(&stream->buffer); }
 
 /* puts an initialized stream object onto the end of a stream's input list */
-void connect (Args *arg, Stream *s) {  
+void connect (Args *arg, Stream *s) {
    s->next = arg->prod;
    arg->prod = s;
 }
@@ -241,4 +241,4 @@ int main () {
 
    pthread_exit(NULL);
 }
-   
+

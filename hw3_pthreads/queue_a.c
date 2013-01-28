@@ -18,7 +18,7 @@ void enqueue(queue *q, void *item) {
    q->data[q->tail] = item;
    q->nelem = q->nelem+1;
    /* Special case, move head to empty element */
-   if (q->head == q->tail) q->head = q->size-1; 
+   if (q->head == q->tail) q->head = q->size-1;
    if (q->tail == q->size-1) q->tail = 0; else q->tail++;
 }
 
@@ -30,14 +30,14 @@ void *dequeue(queue *q) {
       q->head = q->head+1;
       object = q->data[q->head];
       /* an empty queue, initialize */
-      if (q->head+1 == q->tail) q->head = q->tail = 0; 
+      if (q->head+1 == q->tail) q->head = q->tail = 0;
       q->nelem = q->nelem-1;
       return object;
    } else {
       q->head = (q->head+1) % q->size;
       object = q->data[q->head];
       /* an empty queue, initialize */
-      if (((q->head+1) % q->size) == q->tail) q->head = q->tail = 0; 
+      if (((q->head+1) % q->size) == q->tail) q->head = q->tail = 0;
       q->nelem = q->nelem-1;
       return object;
    }
@@ -52,7 +52,7 @@ void print (queue *q) {
 
    printf("q->size=%d q->head=%d q->tail=%d\n",q->size,q->head,q->tail);
    fflush(stdout);
-   if (isEmpty(q)) { 
+   if (isEmpty(q)) {
       printf("(empty)\n");
    } else {
       printf("[");fflush(stdout);
@@ -65,7 +65,7 @@ void print (queue *q) {
 	 }
       }
       printf("]\n");fflush(stdout);
-   }   
+   }
 }
 
 void destroy_queue (queue *q) { free(q->data); }
