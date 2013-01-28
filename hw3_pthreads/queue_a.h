@@ -2,8 +2,8 @@
 #define _QUEUE_A
 
 typedef struct {
-   void **data;
-   int tail, head, size, nelem;
+    void **data;
+    int tail, head, size, nelem;
 } queue;
 
 void init_queue(queue*);
