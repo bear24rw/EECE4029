@@ -57,11 +57,11 @@ void print (queue *q) {
     } else {
         printf("[");fflush(stdout);
         for (i=q->head+1 ; i < q->size && i != q->tail ; i++) {
-            printf("%d ",q->data[i]); fflush(stdout);
+            printf("%d ",*(int*)q->data[i]); fflush(stdout);
         }
         if (i == q->size) {
             for (i=0 ; i < q->tail ; i++) {
-                printf("%d ",q->data[i]); fflush(stdout);
+                printf("%d ",*(int*)q->data[i]); fflush(stdout);
             }
         }
         printf("]\n");fflush(stdout);
