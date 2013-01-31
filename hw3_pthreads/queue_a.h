@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #ifndef _QUEUE_A
 #define _QUEUE_A
 
