@@ -9,30 +9,31 @@
    information regarding the processing of tokens an identity
 */
 typedef struct stream_struct {
-    struct stream_struct *next;
     pthread_mutex_t lock;
     pthread_cond_t notifier;
     queue buffer;               /* a buffer of values of any type      */
     void *args;                 /* arguments for the producing stream */
     int id;                     /* identity of this stream            */
-} Stream;
 
-/*
-prod: linked list of streams that this producer consumes tokens from
-self: the producer's output stream
-*/
-typedef struct {
-    Stream *self, *prod;
-} Args;
+    struct prod_list *prod_head;
+    struct prod_list *prod_curr;
+} stream_t;
 
-void *get(void *stream);
-void put(void *stream, void *value);
+struct prod_list {
+    stream_t *prod;
+    struct prod_list *next;
+};
+
+
+void *get(stream_t *stream);
+void put(stream_t *stream, void *value);
 void *successor(void *stream);
 void *times(void *streams);
 void *merge(void *streams);
 void *consumer(void *streams);
-void init_streams(Args *args, Stream *self, void *data);
-void kill_stream(Stream *stream);
-void connect(Args *arg, Stream *s);
+void *consume_single(void *streams);
+void init_stream(stream_t *stream, void *data);
+void kill_stream(stream_t *stream);
+void connect(stream_t *in, stream_t *out);
 
 #endif

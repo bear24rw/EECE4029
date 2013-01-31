@@ -42,11 +42,12 @@ int idcnt = 1;
 
 
 /* return 'value' which should have a value from a call to put */
-void *get(void *stream) {
+void *get(stream_t *stream)
+{
     void *ret;  /* needed to take save a value from the critical section */
-    queue *q = &((Stream*)stream)->buffer;
-    pthread_mutex_t *lock = &((Stream*)stream)->lock;
-    pthread_cond_t *notifier = &((Stream*)stream)->notifier;
+    queue *q                 = &stream->buffer;
+    pthread_mutex_t *lock    = &stream->lock;
+    pthread_cond_t *notifier = &stream->notifier;
 
     pthread_mutex_lock(lock);    /* lock other threads out of this section    */
     if (isEmpty(q))              /* if nothing in the buffer, wait and open   */
@@ -59,11 +60,11 @@ void *get(void *stream) {
 }
 
 /* 'value' is the value to move to the consumer */
-void put(void *stream, void *value) {
-    int j;
-    queue *q = &((Stream*)stream)->buffer;
-    pthread_mutex_t *lock = &((Stream*)stream)->lock;
-    pthread_cond_t *notifier = &((Stream*)stream)->notifier;
+void put(stream_t *stream, void *value)
+{
+    queue *q                 = &stream->buffer;
+    pthread_mutex_t *lock    = &stream->lock;
+    pthread_cond_t *notifier = &stream->notifier;
 
     pthread_mutex_lock(lock);      /* lock the section */
     if (nelem(q) >= BUFFER_SIZE)   /* if buffer is full, cause the thread to */
@@ -75,15 +76,15 @@ void put(void *stream, void *value) {
     return;
 }
 
-/* Put 1,2,3,4,5... into the self stream */
-void *successor (void *streams) {
+/* Put 1,2,3,4,5... into a stream */
+void *successor (void *stream) {
     struct timeval tv;
-    Stream *self = ((Args*)streams)->self;
-    int id = ((Args*)streams)->self->id;
+    stream_t *self = (stream_t*)stream;
+    int id = self->id;
     int i, *value;
 
     for (i=1 ; ; i++) {
-        /* sleep(1); */
+         sleep(1);
         tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
@@ -96,6 +97,7 @@ void *successor (void *streams) {
 
 /* multiply all tokens from the self stream by (int)self->args and insert
    the resulting tokens into the self stream */
+/*
 void *times (void *streams) {
     struct timeval tv;
     Stream *self = ((Args*)streams)->self;
@@ -111,7 +113,7 @@ void *times (void *streams) {
                 self->id, *(int*)in, prod->id);
 
         value = (int*)malloc(sizeof(int));
-        *value = *(int*)in * (int)(self->args);
+        *value = *(int*)in * *(int*)(self->args);
         free(in);
         put(self, (void*)value);
 
@@ -120,11 +122,13 @@ void *times (void *streams) {
     }
     pthread_exit(NULL);
 }
+*/
 
 /* merge two streams containing tokens in increasing order
 ex: stream 1:  3,6,9,12,15,18...  stream 2: 5,10,15,20,25,30...
 output stream: 3,5,6,9,10,12,15,15,18...
 */
+/*
 void *merge (void *streams) {
     struct timeval tv;
     Stream *self = ((Args*)streams)->self;
@@ -148,44 +152,64 @@ void *merge (void *streams) {
     }
     pthread_exit(NULL);
 }
+*/
 
-/* Final consumer in the network */
-void *consumer (void *streams) {
+void *consumer(void *stream)
+{
     struct timeval tv;
-    Stream *prod = ((Args*)streams)->prod;
+    stream_t *self = (stream_t *)stream;
+    struct prod_list *p = self->prod_head;
     int i;
     void *value;
 
-    for (i=0 ; i < 10 ; i++) {
-        value = get(prod); 
-        tprintf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
-        free(value);
+    for (i=0 ; i < 10 ; i++)
+    {
+        p = self->prod_head;
+        while (p != NULL)
+        {
+            value = get(p->prod);
+            tprintf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
+            free(value);
+
+            p = p->next;
+        }
     }
 
     pthread_exit(NULL);
 }
+/*
+void *consume_single(void *streams) {
+    Stream *prod = ((Args*)streams)->prod;
+    return get(prod);
+}
+*/
 
 /* initialize streams - see also queue_a.h and queue_a.c */
-void init_stream (Args *args, Stream *self, void *data) {
-    if (self != NULL) {
-        self->next = NULL;
-        self->args = data;
-        self->id = idcnt++;
-        init_queue(&self->buffer);
-        pthread_mutex_init(&self->lock, NULL);
-        pthread_cond_init (&self->notifier, NULL);
-    }
-    args->self = self;
-    args->prod = NULL;
+void init_stream(stream_t *stream, void *data) {
+    stream->id = idcnt++;
+    init_queue(&stream->buffer);
+    pthread_mutex_init(&stream->lock, NULL);
+    pthread_cond_init (&stream->notifier, NULL);
+    stream->prod_head = NULL;
+    stream->prod_curr = NULL;
 }
 
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
-void kill_stream(Stream *stream) { destroy_queue(&stream->buffer); }
+void kill_stream(stream_t *stream) { destroy_queue(&stream->buffer); }
 
-/* puts an initialized stream object onto the end of a stream's input list */
-void connect (Args *arg, Stream *s) {
-    s->next = arg->prod;
-    arg->prod = s;
+void connect (stream_t *in, stream_t *out) {
+    struct prod_list *p= (struct prod_list*)malloc(sizeof(struct prod_list));
+
+    p->prod = out;
+    p->next = NULL;
+
+    if (in->prod_head == NULL) {
+        in->prod_head = p;
+        in->prod_curr = p;
+    } else {
+        in->prod_curr->next = p;
+        in->prod_curr = p;
+    }
 }
 
 

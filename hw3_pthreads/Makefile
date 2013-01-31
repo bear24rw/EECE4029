@@ -1,5 +1,8 @@
 all: main.c streams.c queue_a.c queue_a.h
-	gcc main.c streams.c queue_a.c -lpthread -o main
+	gcc -g main.c streams.c queue_a.c -lpthread -o main
+
+test: test.c streams.c queue_a.c queue_a.h
+	gcc -g test.c streams.c queue_a.c -lpthread -o test
 
 clean:
 	rm main
