@@ -14,6 +14,9 @@ typedef struct stream_struct {
     queue buffer;               /* a buffer of values of any type      */
     void *args;                 /* arguments for the producing stream */
     int id;                     /* identity of this stream            */
+    int num_consumers;          /* how many consumers are connected */
+    int consumers_served;       /* how many consumers have been served the current value */
+    void *current_value;
 
     struct prod_list *prod_head;
     struct prod_list *prod_curr;

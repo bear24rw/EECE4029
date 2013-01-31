@@ -44,19 +44,38 @@ int idcnt = 1;
 /* return 'value' which should have a value from a call to put */
 void *get(stream_t *stream)
 {
+    struct timeval tv;
     void *ret;  /* needed to take save a value from the critical section */
     queue *q                 = &stream->buffer;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
 
-    pthread_mutex_lock(lock);    /* lock other threads out of this section    */
-    if (isEmpty(q))              /* if nothing in the buffer, wait and open   */
-        pthread_cond_wait(notifier, lock);     /* the section to other threads */
-    ret = dequeue(q);            /* take the next token from the buffer       */
-    pthread_cond_signal(notifier);  /* if producer is waiting to add a token  */
-    pthread_mutex_unlock(lock);     /* wake it up and unlock the section      */
+    pthread_mutex_lock(lock);              /* lock other threads out of this section    */
 
-    return ret;
+    if (isEmpty(q))                        /* if nothing in the buffer, wait and open   */
+        pthread_cond_wait(notifier, lock); /* the section to other threads */
+
+    // we are about to server a consumer
+    stream->consumers_served++;
+
+    // if this is the first consumer get a new value
+    if (stream->consumers_served == 1) {
+        //printf("streamid: %d getting new value\n", stream->id);
+        stream->current_value = dequeue(q);    /* take the next token from the buffer       */
+        pthread_cond_signal(notifier);         /* if producer is waiting to add a token  */
+    }
+
+    //tprintf("served: %d / %d (value: %d)\n", stream->consumers_served, stream->num_consumers, *(int*)stream->current_value);
+
+    // if we've served all the consumers reset the count or the next value
+    if (stream->consumers_served > stream->num_consumers) {
+        stream->consumers_served = 0;
+    }
+
+    //printf("current value: %d\n", *((int*)(stream->current_value)));
+    pthread_mutex_unlock(lock);            /* wake it up and unlock the section      */
+
+    return stream->current_value;
 }
 
 /* 'value' is the value to move to the consumer */
@@ -66,12 +85,12 @@ void put(stream_t *stream, void *value)
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
 
-    pthread_mutex_lock(lock);      /* lock the section */
-    if (nelem(q) >= BUFFER_SIZE)   /* if buffer is full, cause the thread to */
-        pthread_cond_wait(notifier, lock);  /* wait - unlock the section      */
-    enqueue(q,value);              /* add the 'value' token to the buffer    */
-    pthread_cond_signal(notifier); /* wake up a sleeping consumer, if any    */
-    pthread_mutex_unlock(lock);    /* unlock the section */
+    pthread_mutex_lock(lock);              /* lock the section */
+    if (nelem(q) >= BUFFER_SIZE)           /* if buffer is full, cause the thread to */
+        pthread_cond_wait(notifier, lock); /* wait - unlock the section      */
+    enqueue(q,value);                      /* add the 'value' token to the buffer    */
+    pthread_cond_signal(notifier);         /* wake up a sleeping consumer, if any    */
+    pthread_mutex_unlock(lock);            /* unlock the section */
 
     return;
 }
@@ -168,8 +187,8 @@ void *consumer(void *stream)
         while (p != NULL)
         {
             value = get(p->prod);
-            tprintf("\t\t\t\t\t\t\tConsumer: got %d\n", *(int*)value);
-            free(value);
+            tprintf("\t\t\t\t\t\t\tConsumer %d: got %d\n", self->id, *(int*)value);
+            //free(value);
 
             p = p->next;
         }
@@ -192,6 +211,8 @@ void init_stream(stream_t *stream, void *data) {
     pthread_cond_init (&stream->notifier, NULL);
     stream->prod_head = NULL;
     stream->prod_curr = NULL;
+    stream->num_consumers = 0;
+    stream->consumers_served = 0;
 }
 
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
@@ -210,6 +231,9 @@ void connect (stream_t *in, stream_t *out) {
         in->prod_curr->next = p;
         in->prod_curr = p;
     }
+
+    /* account for this consumer */
+    out->num_consumers++;
 }
 
 
