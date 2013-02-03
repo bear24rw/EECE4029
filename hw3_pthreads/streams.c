@@ -25,7 +25,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include "streams.h"
-#include "queue_a.h"
+//#include "queue_a.h"
 
 pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -37,58 +37,87 @@ pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_unlock(&print_lock); \
 }
 
-#define BUFFER_SIZE 5
 int idcnt = 1;
 
-
-/* return 'value' which should have a value from a call to put */
-void *get(stream_t *stream)
+void *get(struct prod_list *producer)
 {
     struct timeval tv;
     void *ret;  /* needed to take save a value from the critical section */
-    queue *q                 = &stream->buffer;
-    pthread_mutex_t *lock    = &stream->lock;
-    pthread_cond_t *notifier = &stream->notifier;
 
-    pthread_mutex_lock(lock);              /* lock other threads out of this section    */
+    void *buffer             = &producer->stream->buffer;
+    int *buffer_idx          = &producer->buffer_idx;
+    pthread_mutex_t *lock    = &producer->stream->lock;
+    pthread_cond_t *notifier = &producer->stream->notifier;
 
-    if (isEmpty(q))                        /* if nothing in the buffer, wait and open   */
-        pthread_cond_wait(notifier, lock); /* the section to other threads */
+    /* make sure no other getters come in here */
+    pthread_mutex_lock(lock);
 
-    // we are about to server a consumer
-    stream->consumers_served++;
-
-    // if this is the first consumer get a new value
-    if (stream->consumers_served == 1) {
-        //printf("streamid: %d getting new value\n", stream->id);
-        stream->current_value = dequeue(q);    /* take the next token from the buffer       */
-        pthread_cond_signal(notifier);         /* if producer is waiting to add a token  */
+    /* if we caught up to where the producer is writing, wait */
+    if (*buffer_idx == producer->stream->put_idx) {
+        //tprintf("\t\tWaiting at buff idx %d\n", *buffer_idx);
+        pthread_cond_wait(notifier, lock);
     }
 
-    //tprintf("served: %d / %d (value: %d)\n", stream->consumers_served, stream->num_consumers, *(int*)stream->current_value);
+    /* get the value out of the producer streams buffer */
+    ret = producer->stream->buffer[*buffer_idx];
+    //tprintf("\t\tGetting from buf idx %d, put idx %d\n", *buffer_idx, producer->stream->put_idx);
 
-    // if we've served all the consumers reset the count or the next value
-    if (stream->consumers_served > stream->num_consumers) {
-        stream->consumers_served = 0;
-    }
+    /* go to the next buffer location */
+    *buffer_idx = (*buffer_idx + 1) % BUFFER_SIZE;
 
-    //printf("current value: %d\n", *((int*)(stream->current_value)));
-    pthread_mutex_unlock(lock);            /* wake it up and unlock the section      */
+    /* notify producer that we've moved on */
+    pthread_cond_signal(notifier);
 
-    return stream->current_value;
+    /* allow other getters to come in */
+    pthread_mutex_unlock(lock);
+
+    return ret;
 }
 
-/* 'value' is the value to move to the consumer */
 void put(stream_t *stream, void *value)
 {
-    queue *q                 = &stream->buffer;
+    struct timeval tv;
+    void *buffer             = stream->buffer;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
 
     pthread_mutex_lock(lock);              /* lock the section */
-    if (nelem(q) >= BUFFER_SIZE)           /* if buffer is full, cause the thread to */
-        pthread_cond_wait(notifier, lock); /* wait - unlock the section      */
-    enqueue(q,value);                      /* add the 'value' token to the buffer    */
+
+    /*
+     * loop through all getters and see if we're now at the same position as
+     * one of them. if we are  we need to wait until they notify us that they
+     * moved.
+     */
+
+    int wait;
+    struct cons_list *c;
+
+    do {
+        /* assume we don't have to wait */
+        wait = 0;
+        c = stream->cons_head;
+        while (c != NULL)
+        {
+            if (c->prod->buffer_idx == (stream->put_idx + 1) % BUFFER_SIZE) {
+                //tprintf("Putter waiting at idx %d\n", stream->put_idx);
+                wait = 1;
+                break;
+            }
+            c = c->next;
+        }
+        /* wait until a getter notifies us */
+        if (wait) pthread_cond_wait(notifier, lock);
+
+    /* check again since things might have changed while we were waiting */
+    } while (wait == 1);
+
+
+    stream->buffer[stream->put_idx] = value;        /* add value to the buffer */
+    //tprintf("Putting <%d> at idx %d\n", *(int*)value, stream->put_idx);
+
+    /* go to next buffer position */
+    stream->put_idx = (stream->put_idx + 1) % BUFFER_SIZE;
+
     pthread_cond_signal(notifier);         /* wake up a sleeping consumer, if any    */
     pthread_mutex_unlock(lock);            /* unlock the section */
 
@@ -103,13 +132,13 @@ void *successor (void *stream) {
     int i, *value;
 
     for (i=1 ; ; i++) {
-         sleep(1);
+        sleep(1);
         tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
         put(self, (void*)value);
-        tprintf("Successor(%d): sent %d, buf_sz=%d\n",
-                id, i, nelem(&self->buffer));
+        //tprintf("Successor(%d): sent %d, buf_sz=%d\n",
+                //id, i, nelem(&self->buffer));
     }
     pthread_exit(NULL);
 }
@@ -183,10 +212,11 @@ void *consumer(void *stream)
 
     for (i=0 ; i < 10 ; i++)
     {
+        //sleep(1);
         p = self->prod_head;
         while (p != NULL)
         {
-            value = get(p->prod);
+            value = get(p);
             tprintf("\t\t\t\t\t\t\tConsumer %d: got %d\n", self->id, *(int*)value);
             //free(value);
 
@@ -206,22 +236,26 @@ void *consume_single(void *streams) {
 /* initialize streams - see also queue_a.h and queue_a.c */
 void init_stream(stream_t *stream, void *data) {
     stream->id = idcnt++;
-    init_queue(&stream->buffer);
+    //init_queue(&stream->buffer);
     pthread_mutex_init(&stream->lock, NULL);
     pthread_cond_init (&stream->notifier, NULL);
     stream->prod_head = NULL;
     stream->prod_curr = NULL;
-    stream->num_consumers = 0;
-    stream->consumers_served = 0;
+    stream->cons_head = NULL;
+    stream->cons_curr = NULL;
+    stream->put_idx = 0;
 }
 
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
-void kill_stream(stream_t *stream) { destroy_queue(&stream->buffer); }
+void kill_stream(stream_t *stream) { /*destroy_queue(&stream->buffer);*/ }
 
 void connect (stream_t *in, stream_t *out) {
-    struct prod_list *p= (struct prod_list*)malloc(sizeof(struct prod_list));
 
-    p->prod = out;
+    /* add the producer to the consumers list of producers */
+    struct prod_list *p = (struct prod_list*)malloc(sizeof(struct prod_list));
+
+    p->buffer_idx = 0;
+    p->stream = out;
     p->next = NULL;
 
     if (in->prod_head == NULL) {
@@ -232,8 +266,20 @@ void connect (stream_t *in, stream_t *out) {
         in->prod_curr = p;
     }
 
-    /* account for this consumer */
-    out->num_consumers++;
+    /* add the consumer to the producer list of consumers */
+    struct cons_list *c = (struct cons_list*)malloc(sizeof(struct cons_list));
+
+    c->prod = p;
+    c->next = NULL;
+
+    if (out->cons_head == NULL) {
+        out->cons_head = c;
+        out->cons_curr = c;
+    } else {
+        out->cons_curr->next = c;
+        out->cons_curr = c;
+    }
 }
+
 
 

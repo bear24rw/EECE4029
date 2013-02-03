@@ -3,6 +3,8 @@
 #ifndef __STREAMS_H__
 #define __STREAMS_H__
 
+#define BUFFER_SIZE 5
+
 /*
    One of these per stream.  Holds:  the mutex lock and notifier condition
    variables a buffer of tokens taken from a producer a structure with
@@ -11,24 +13,32 @@
 typedef struct stream_struct {
     pthread_mutex_t lock;
     pthread_cond_t notifier;
-    queue buffer;               /* a buffer of values of any type      */
-    void *args;                 /* arguments for the producing stream */
+    void *buffer[BUFFER_SIZE];
     int id;                     /* identity of this stream            */
-    int num_consumers;          /* how many consumers are connected */
-    int consumers_served;       /* how many consumers have been served the current value */
-    void *current_value;
+
+    int put_idx;
 
     struct prod_list *prod_head;
     struct prod_list *prod_curr;
+
+    struct cons_list *cons_head;
+    struct cons_list *cons_curr;
+
 } stream_t;
 
 struct prod_list {
-    stream_t *prod;
+    int buffer_idx;
+    stream_t *stream;
     struct prod_list *next;
 };
 
+struct cons_list {
+    struct prod_list *prod;
+    struct cons_list *next;
+};
 
-void *get(stream_t *stream);
+
+void *get(struct prod_list *producer);
 void put(stream_t *stream, void *value);
 void *successor(void *stream);
 void *times(void *streams);
