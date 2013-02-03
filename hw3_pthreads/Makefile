@@ -1,8 +1,25 @@
-all: main.c streams.c queue_a.c queue_a.h
-	gcc -g main.c streams.c queue_a.c -lpthread -o main
+CC = gcc
+CFLAGS = -g -Wall
+LIBS = -lpthread
 
-test: test.c streams.c queue_a.c
-	gcc -g test.c streams.c -lpthread -o test
+TESTS = test_one_to_many \
+		test_many_to_one \
+		test_many_to_many
+
+TESTS_C = ${TESTS:=.c}
+
+all: main
+
+main: main.o streams.o
+	$(CC) -lpthread main.o streams.o -o main
+
+tests: ${TESTS}
+
+$(TESTS): ${TESTS_C} streams.c
+	@echo
+	@echo "========== "$@" =========="
+	@echo
+	$(CC) $(CFLAGS) $(LIBS) $@.c streams.c -o $@
 
 clean:
-	rm main
+	rm ${TESTS} main

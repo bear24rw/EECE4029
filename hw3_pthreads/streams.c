@@ -24,8 +24,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include "streams.h"
-//#include "queue_a.h"
 
 pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -41,10 +41,9 @@ int idcnt = 1;
 
 void *get(struct prod_list *producer)
 {
-    struct timeval tv;
+    //struct timeval tv;
     void *ret;  /* needed to take save a value from the critical section */
 
-    void *buffer             = &producer->stream->buffer;
     int *buffer_idx          = &producer->buffer_idx;
     pthread_mutex_t *lock    = &producer->stream->lock;
     pthread_cond_t *notifier = &producer->stream->notifier;
@@ -76,8 +75,7 @@ void *get(struct prod_list *producer)
 
 void put(stream_t *stream, void *value)
 {
-    struct timeval tv;
-    void *buffer             = stream->buffer;
+    //struct timeval tv;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
 
@@ -132,7 +130,7 @@ void *successor (void *stream) {
     int i, *value;
 
     for (i=1 ; ; i++) {
-        sleep(1);
+        //sleep(1);
         tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
@@ -212,7 +210,7 @@ void *consumer(void *stream)
 
     for (i=0 ; i < 10 ; i++)
     {
-        //sleep(1);
+        sleep(1);
         p = self->prod_head;
         while (p != NULL)
         {
@@ -247,7 +245,7 @@ void init_stream(stream_t *stream, void *data) {
 }
 
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
-void kill_stream(stream_t *stream) { /*destroy_queue(&stream->buffer);*/ }
+void kill_stream(stream_t *stream) { }
 
 void connect (stream_t *in, stream_t *out) {
 
