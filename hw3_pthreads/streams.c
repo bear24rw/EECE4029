@@ -42,7 +42,7 @@ int idcnt = 1;
 
 void *get(struct prod_list *producer)
 {
-    //struct timeval tv;
+    struct timeval tv;
     void *ret;  /* needed to take save a value from the critical section */
 
     int *buffer_idx          = &producer->buffer_idx;
@@ -60,7 +60,7 @@ void *get(struct prod_list *producer)
     }
 
     /* if there isn't anything new here, wait */
-    while (producer->stream->buffer_read_count[*buffer_idx] == 0) {
+    while (producer->stream->buffer_read_count[*buffer_idx] >= producer->stream->num_consumers) {
         //tprintf("\tGetter found nothing new at idx %d, waiting\n", *buffer_idx)
         pthread_cond_wait(notifier, lock);
     }
@@ -76,10 +76,10 @@ void *get(struct prod_list *producer)
     ret = producer->stream->buffer[*buffer_idx];
 
     /* decrease the read count since we just got a value */
-    producer->stream->buffer_read_count[*buffer_idx]--;
+    producer->stream->buffer_read_count[*buffer_idx]++;
 
     /* if we are last getter, the spot is now empty */
-    if(producer->stream->buffer_read_count[*buffer_idx] == 0)
+    if(producer->stream->buffer_read_count[*buffer_idx] == producer->stream->num_consumers)
         sem_post(empty);
 
     /* go to the next buffer location for next time*/
@@ -96,7 +96,7 @@ void *get(struct prod_list *producer)
 
 void put(stream_t *stream, void *value)
 {
-    //struct timeval tv;
+    struct timeval tv;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
     sem_t *empty             = &stream->empty;
@@ -107,8 +107,9 @@ void put(stream_t *stream, void *value)
     pthread_mutex_lock(lock);
 
     /* wait if all consumers haven't seen this value */
-    while (stream->buffer_read_count[stream->put_idx] != 0) {
-        //tprintf("Put read count at idx %d is %d, waiting\n", stream->put_idx, stream->buffer_read_count[stream->put_idx]);
+    while (stream->buffer_read_count[stream->put_idx] < stream->num_consumers) {
+        tprintf("Put read count at idx %d is %d, waiting\n", stream->put_idx, stream->buffer_read_count[stream->put_idx]);
+        tprintf("Num consumers: %d\n", stream->num_consumers);
         pthread_cond_wait(notifier, lock);
     }
 
@@ -116,7 +117,7 @@ void put(stream_t *stream, void *value)
     stream->buffer[stream->put_idx] = value;
 
     /* reset the read cound since this is a fresh value */
-    stream->buffer_read_count[stream->put_idx] = stream->num_consumers;
+    stream->buffer_read_count[stream->put_idx] = 0;
     //tprintf("Putting '%d' at idx %d\n", *(int*)value, stream->put_idx);
 
     /* go next buffer position for next time */
@@ -140,11 +141,11 @@ void *successor (void *stream) {
 
     for (i=1 ; ; i++) {
         sleep(delay);
-        tprintf("Successor(%d): sending %d\n", id, i);
+        //tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
         put(self, (void*)value);
-        tprintf("Successor(%d): sent %d\n", id, i);
+        //tprintf("Successor(%d): sent %d\n", id, i);
     }
     pthread_exit(NULL);
 }
@@ -255,7 +256,7 @@ void init_stream(stream_t *stream, void *data) {
     stream->num_consumers = 0;
     int i;
     for (i=0; i<BUFFER_SIZE; i++)
-        stream->buffer_read_count[i] = 0;
+        stream->buffer_read_count[i] = 9999;
     sem_init(&stream->empty, 0, BUFFER_SIZE);
 }
 
@@ -267,20 +268,43 @@ void stream_connect (stream_t *in, stream_t *out) {
     /* add the producer to the consumers list of producers */
     struct prod_list *p = (struct prod_list*)malloc(sizeof(struct prod_list));
 
-    p->buffer_idx = 0;
+    p->buffer_idx = out->put_idx;
     p->stream = out;
     p->next = NULL;
+    p->prev = NULL;
 
     if (in->prod_head == NULL) {
         in->prod_head = p;
         in->prod_curr = p;
     } else {
+        p->prev = in->prod_curr;
         in->prod_curr->next = p;
         in->prod_curr = p;
     }
 
     out->num_consumers++;
+    pthread_cond_signal(&out->notifier);
+    pthread_cond_signal(&in->notifier);
 }
 
+void stream_disconnect(stream_t *in, stream_t *out) {
 
+    struct prod_list *p = in->prod_head;
+
+    while (p != NULL)
+    {
+        if (p->stream == out) {
+            if (p->prev != NULL) {
+                p->prev->next = p->next;
+                if (p->next != NULL) {
+                    p->next->prev = p->prev;
+                }
+            }
+            free(p);
+            out->num_consumers--;
+            break;
+        }
+        p = p->next;
+    }
+}
 

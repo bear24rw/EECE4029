@@ -31,6 +31,7 @@ struct prod_list {
     int buffer_idx;
     stream_t *stream;
     struct prod_list *next;
+    struct prod_list *prev;
 };
 
 
@@ -44,5 +45,6 @@ void *consume_single(stream_t *stream);
 void init_stream(stream_t *stream, void *data);
 void kill_stream(stream_t *stream);
 void stream_connect(stream_t *in, stream_t *out);
+void stream_disconnect(stream_t *in, stream_t *out);
 
 #endif
