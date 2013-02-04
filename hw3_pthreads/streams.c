@@ -145,7 +145,7 @@ void *successor (void *stream) {
         value = (int*)malloc(sizeof(int));
         *value = i;
         put(self, (void*)value);
-        //tprintf("Successor(%d): sent %d\n", id, i);
+        tprintf("Successor(%d): sent %d\n", id, i);
     }
     pthread_exit(NULL);
 }
