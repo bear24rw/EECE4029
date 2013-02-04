@@ -53,8 +53,8 @@ void *get(struct prod_list *producer)
     /* make sure no other getters come in here */
     pthread_mutex_lock(lock);
 
-    /* if we caught up to where the producer is writing, wait */
-    while (*buffer_idx == (producer->stream->put_idx+1)%BUFFER_SIZE) {
+    /* if we are ahead where the producer is writing, wait */
+    while ((*buffer_idx+1)%BUFFER_SIZE == (producer->stream->put_idx)%BUFFER_SIZE) {
         //tprintf("\tGetter caught up to putter, waiting at buff idx %d\n", *buffer_idx);
         pthread_cond_wait(notifier, lock);
     }

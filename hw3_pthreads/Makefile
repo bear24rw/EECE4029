@@ -6,7 +6,8 @@ TESTS = tests/one_to_many \
 		tests/many_to_one \
 		tests/many_to_many \
 		tests/consume_non_threaded \
-		tests/no_connections
+		tests/no_connections \
+		tests/consumers_at_different_rates
 
 TESTS_C = ${TESTS:=.c}
 
