@@ -23,9 +23,9 @@ int main(void) {
     init_stream(&cons2, NULL);
     init_stream(&cons3, NULL);
 
-    connect(&cons1, &suc1);
-    connect(&cons2, &suc1);
-    connect(&cons3, &suc1);
+    stream_connect(&cons1, &suc1);
+    stream_connect(&cons2, &suc1);
+    stream_connect(&cons3, &suc1);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);

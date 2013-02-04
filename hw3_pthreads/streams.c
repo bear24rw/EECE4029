@@ -109,12 +109,13 @@ void put(stream_t *stream, void *value)
     /* check again since things might have changed while we were waiting */
     } while (wait == 1);
 
+    /* we are clean to go to next buffer position */
+    stream->put_idx = (stream->put_idx + 1) % BUFFER_SIZE;
 
-    stream->buffer[stream->put_idx] = value;        /* add value to the buffer */
+    /* put the new value in the buffer */
+    stream->buffer[stream->put_idx] = value;
     //tprintf("Putting <%d> at idx %d\n", *(int*)value, stream->put_idx);
 
-    /* go to next buffer position */
-    stream->put_idx = (stream->put_idx + 1) % BUFFER_SIZE;
 
     pthread_cond_signal(notifier);         /* wake up a sleeping consumer, if any    */
     pthread_mutex_unlock(lock);            /* unlock the section */
@@ -224,17 +225,16 @@ void *consumer(void *stream)
 
     pthread_exit(NULL);
 }
-/*
-void *consume_single(void *streams) {
-    Stream *prod = ((Args*)streams)->prod;
-    return get(prod);
+
+void *consume_single(stream_t *stream) {
+    struct prod_list *p = stream->prod_head;
+    return get(p);
 }
-*/
+
 
 /* initialize streams - see also queue_a.h and queue_a.c */
 void init_stream(stream_t *stream, void *data) {
     stream->id = idcnt++;
-    //init_queue(&stream->buffer);
     pthread_mutex_init(&stream->lock, NULL);
     pthread_cond_init (&stream->notifier, NULL);
     stream->prod_head = NULL;
@@ -247,7 +247,7 @@ void init_stream(stream_t *stream, void *data) {
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
 void kill_stream(stream_t *stream) { }
 
-void connect (stream_t *in, stream_t *out) {
+void stream_connect (stream_t *in, stream_t *out) {
 
     /* add the producer to the consumers list of producers */
     struct prod_list *p = (struct prod_list*)malloc(sizeof(struct prod_list));

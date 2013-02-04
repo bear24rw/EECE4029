@@ -44,9 +44,9 @@ void *successor(void *stream);
 void *times(void *streams);
 void *merge(void *streams);
 void *consumer(void *streams);
-void *consume_single(void *streams);
+void *consume_single(stream_t *stream);
 void init_stream(stream_t *stream, void *data);
 void kill_stream(stream_t *stream);
-void connect(stream_t *in, stream_t *out);
+void stream_connect(stream_t *in, stream_t *out);
 
 #endif
