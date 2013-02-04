@@ -15,6 +15,7 @@
 
 int main () {
 
+    int delay = 0;
     int times_5 = 5;
     int times_7 = 7;
 
@@ -30,11 +31,11 @@ int main () {
     stream_t s_merge;
     stream_t s_cons;
 
-    init_stream(&s_suc    , NULL);
+    init_stream(&s_suc    , (void*)&delay);
     init_stream(&s_times5 , (void*)&times_5);
     init_stream(&s_times7 , (void*)&times_7);
     init_stream(&s_merge  , NULL);
-    init_stream(&s_cons   , NULL);
+    init_stream(&s_cons   , (void*)&delay);
 
     stream_connect(&s_cons   , &s_merge);
     stream_connect(&s_merge  , &s_times5);
