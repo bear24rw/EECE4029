@@ -8,6 +8,8 @@ int main(void) {
     printf("02\t3 successors, 1 consumer\n");
     printf("03\t------------------------\n");
 
+    int delay = 0;
+
     pthread_t s1;
     pthread_t s2;
     pthread_t s3;
@@ -18,10 +20,10 @@ int main(void) {
     stream_t suc3;
     stream_t cons1;
 
-    init_stream(&suc1, NULL);
-    init_stream(&suc2, NULL);
-    init_stream(&suc3, NULL);
-    init_stream(&cons1, NULL);
+    init_stream(&suc1, &delay);
+    init_stream(&suc2, &delay);
+    init_stream(&suc3, &delay);
+    init_stream(&cons1, &delay);
 
     stream_connect(&cons1, &suc1);
     stream_connect(&cons1, &suc2);

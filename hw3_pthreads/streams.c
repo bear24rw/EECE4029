@@ -134,11 +134,12 @@ void put(stream_t *stream, void *value)
 void *successor (void *stream) {
     struct timeval tv;
     stream_t *self = (stream_t*)stream;
+    int delay = *(int*)self->data;
     int id = self->id;
     int i, *value;
 
     for (i=1 ; ; i++) {
-        //sleep(1);
+        sleep(delay);
         tprintf("Successor(%d): sending %d\n", id, i);
         value = (int*)malloc(sizeof(int));
         *value = i;
@@ -217,12 +218,13 @@ void *consumer(void *stream)
     struct timeval tv;
     stream_t *self = (stream_t *)stream;
     struct prod_list *p = self->prod_head;
+    int delay = *(int*)self->data;
     int i;
     void *value;
 
     for (i=0 ; i < 10 ; i++)
     {
-        //sleep(1);
+        sleep(delay);
         p = self->prod_head;
         while (p != NULL)
         {

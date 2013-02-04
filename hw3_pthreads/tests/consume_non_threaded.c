@@ -8,13 +8,16 @@ int main(void) {
     printf("02\t1 successor, 1 non threaded consumer\n");
     printf("03\t------------------------------------\n");
 
+    int suc_delay = 0;
+    int cons_delay = 0;
+
     pthread_t s1;
 
     stream_t suc1;
     stream_t cons1;
 
-    init_stream(&suc1, NULL);
-    init_stream(&cons1, NULL);
+    init_stream(&suc1, &suc_delay);
+    init_stream(&cons1, &cons_delay);
 
     stream_connect(&cons1, &suc1);
 
