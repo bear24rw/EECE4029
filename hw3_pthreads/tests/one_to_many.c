@@ -46,8 +46,6 @@ int main(void) {
 
     kill_stream(&suc1);
 
-    pthread_exit(NULL);
-
     return 0;
 }
 

@@ -48,8 +48,6 @@ int main(void) {
     kill_stream(&suc2);
     kill_stream(&suc3);
 
-    pthread_exit(NULL);
-
     return 0;
 }
 
