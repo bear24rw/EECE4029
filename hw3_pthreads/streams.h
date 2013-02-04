@@ -1,4 +1,4 @@
-#include "queue_a.h"
+#include <semaphore.h>
 
 #ifndef __STREAMS_H__
 #define __STREAMS_H__
@@ -11,19 +11,20 @@
    information regarding the processing of tokens an identity
 */
 typedef struct stream_struct {
+    int id;                     /* identity of this stream            */
+    void *data;
     pthread_mutex_t lock;
     pthread_cond_t notifier;
+
+    sem_t empty;
     void *buffer[BUFFER_SIZE];
-    int id;                     /* identity of this stream            */
+    int buffer_read_count[BUFFER_SIZE];
 
     int put_idx;
+    int num_consumers;
 
     struct prod_list *prod_head;
     struct prod_list *prod_curr;
-
-    struct cons_list *cons_head;
-    struct cons_list *cons_curr;
-
 } stream_t;
 
 struct prod_list {
@@ -32,17 +33,12 @@ struct prod_list {
     struct prod_list *next;
 };
 
-struct cons_list {
-    struct prod_list *prod;
-    struct cons_list *next;
-};
-
 
 void *get(struct prod_list *producer);
 void put(stream_t *stream, void *value);
 void *successor(void *stream);
-void *times(void *streams);
-void *merge(void *streams);
+void *times(void *stream);
+void *merge(void *stream);
 void *consumer(void *streams);
 void *consume_single(stream_t *stream);
 void init_stream(stream_t *stream, void *data);

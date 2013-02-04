@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <semaphore.h>
 #include "streams.h"
 
 pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -47,21 +48,41 @@ void *get(struct prod_list *producer)
     int *buffer_idx          = &producer->buffer_idx;
     pthread_mutex_t *lock    = &producer->stream->lock;
     pthread_cond_t *notifier = &producer->stream->notifier;
+    sem_t *empty             = &producer->stream->empty;
 
     /* make sure no other getters come in here */
     pthread_mutex_lock(lock);
 
     /* if we caught up to where the producer is writing, wait */
-    if (*buffer_idx == producer->stream->put_idx) {
-        //tprintf("\t\tWaiting at buff idx %d\n", *buffer_idx);
+    while (*buffer_idx == (producer->stream->put_idx+1)%BUFFER_SIZE) {
+        //tprintf("\tGetter caught up to putter, waiting at buff idx %d\n", *buffer_idx);
         pthread_cond_wait(notifier, lock);
     }
 
+    /* if there isn't anything new here, wait */
+    while (producer->stream->buffer_read_count[*buffer_idx] == 0) {
+        //tprintf("\tGetter found nothing new at idx %d, waiting\n", *buffer_idx)
+        pthread_cond_wait(notifier, lock);
+    }
+
+/*
+    tprintf("\t\tGetting from buf idx %d (read count: %d) current put idx %d\n",
+            *buffer_idx,
+            producer->stream->buffer_read_count[*buffer_idx],
+            producer->stream->put_idx);
+*/
+
     /* get the value out of the producer streams buffer */
     ret = producer->stream->buffer[*buffer_idx];
-    //tprintf("\t\tGetting from buf idx %d, put idx %d\n", *buffer_idx, producer->stream->put_idx);
 
-    /* go to the next buffer location */
+    /* decrease the read count since we just got a value */
+    producer->stream->buffer_read_count[*buffer_idx]--;
+
+    /* if we are last getter, the spot is now empty */
+    if(producer->stream->buffer_read_count[*buffer_idx] == 0)
+        sem_post(empty);
+
+    /* go to the next buffer location for next time*/
     *buffer_idx = (*buffer_idx + 1) % BUFFER_SIZE;
 
     /* notify producer that we've moved on */
@@ -78,47 +99,33 @@ void put(stream_t *stream, void *value)
     //struct timeval tv;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
+    sem_t *empty             = &stream->empty;
 
-    pthread_mutex_lock(lock);              /* lock the section */
+    /* wait until there are empty slots in the buffer */
+    sem_wait(empty);
 
-    /*
-     * loop through all getters and see if we're now at the same position as
-     * one of them. if we are  we need to wait until they notify us that they
-     * moved.
-     */
+    pthread_mutex_lock(lock);
 
-    int wait;
-    struct cons_list *c;
-
-    do {
-        /* assume we don't have to wait */
-        wait = 0;
-        c = stream->cons_head;
-        while (c != NULL)
-        {
-            if (c->prod->buffer_idx == (stream->put_idx + 1) % BUFFER_SIZE) {
-                //tprintf("Putter waiting at idx %d\n", stream->put_idx);
-                wait = 1;
-                break;
-            }
-            c = c->next;
-        }
-        /* wait until a getter notifies us */
-        if (wait) pthread_cond_wait(notifier, lock);
-
-    /* check again since things might have changed while we were waiting */
-    } while (wait == 1);
-
-    /* we are clean to go to next buffer position */
-    stream->put_idx = (stream->put_idx + 1) % BUFFER_SIZE;
+    /* wait if all consumers haven't seen this value */
+    while (stream->buffer_read_count[stream->put_idx] != 0) {
+        //tprintf("Put read count at idx %d is %d, waiting\n", stream->put_idx, stream->buffer_read_count[stream->put_idx]);
+        pthread_cond_wait(notifier, lock);
+    }
 
     /* put the new value in the buffer */
     stream->buffer[stream->put_idx] = value;
-    //tprintf("Putting <%d> at idx %d\n", *(int*)value, stream->put_idx);
 
+    /* reset the read cound since this is a fresh value */
+    stream->buffer_read_count[stream->put_idx] = stream->num_consumers;
+    //tprintf("Putting '%d' at idx %d\n", *(int*)value, stream->put_idx);
 
-    pthread_cond_signal(notifier);         /* wake up a sleeping consumer, if any    */
-    pthread_mutex_unlock(lock);            /* unlock the section */
+    /* go next buffer position for next time */
+    stream->put_idx = (stream->put_idx + 1) % BUFFER_SIZE;
+
+    /* notify the consumer that we've updated */
+    pthread_cond_signal(notifier);
+
+    pthread_mutex_unlock(lock);
 
     return;
 }
@@ -136,70 +143,74 @@ void *successor (void *stream) {
         value = (int*)malloc(sizeof(int));
         *value = i;
         put(self, (void*)value);
-        //tprintf("Successor(%d): sent %d, buf_sz=%d\n",
-                //id, i, nelem(&self->buffer));
+        tprintf("Successor(%d): sent %d\n", id, i);
     }
     pthread_exit(NULL);
 }
 
 /* multiply all tokens from the self stream by (int)self->args and insert
    the resulting tokens into the self stream */
-/*
-void *times (void *streams) {
+void *times (void *stream) {
     struct timeval tv;
-    Stream *self = ((Args*)streams)->self;
-    Stream *prod = ((Args*)streams)->prod;
-    int *value;
-    void *in;
+    stream_t *self = (stream_t *)stream;
+    struct prod_list *p = self->prod_head;
+    int multiplier = *(int*)self->data;
+    int in;
+    int *out;
 
-    tprintf("Times(%d) connected to Successor (%d)\n", self->id, prod->id);
+    tprintf("Times(%d) connected to Successor (%d)\n", self->id, p->stream->id);
+
     while (true) {
-        in = get(prod);
+        p = self->prod_head;
+        while (p != NULL)
+        {
+            in = *(int*)get(p);
 
-        tprintf("\t\tTimes(%d): got %d from Successor %d\n",
-                self->id, *(int*)in, prod->id);
+            tprintf("\t\tTimes(%d): got %d from Successor %d\n", self->id, in, p->stream->id); 
 
-        value = (int*)malloc(sizeof(int));
-        *value = *(int*)in * *(int*)(self->args);
-        free(in);
-        put(self, (void*)value);
+            out = (int*)malloc(sizeof(int));
+            *out = in * multiplier;
+            put(self, (void*)out);
 
-        tprintf("\t\tTimes(%d): sent %d buf_sz=%d\n",
-                self->id, *value, nelem(&self->buffer));
+            tprintf("\t\tTimes(%d): sent %d\n", self->id, *out);
+        }
     }
     pthread_exit(NULL);
 }
-*/
+
 
 /* merge two streams containing tokens in increasing order
 ex: stream 1:  3,6,9,12,15,18...  stream 2: 5,10,15,20,25,30...
 output stream: 3,5,6,9,10,12,15,15,18...
 */
-/*
-void *merge (void *streams) {
+
+void *merge (void *stream) {
     struct timeval tv;
-    Stream *self = ((Args*)streams)->self;
-    Stream *s1 = ((Args*)streams)->prod;
-    Stream *s2 = (((Args*)streams)->prod)->next;
-    void *a = get(s1);
-    void *b = get(s2);
+
+    stream_t *self = (stream_t *)stream;
+
+    struct prod_list *p1 = self->prod_head;
+    struct prod_list *p2 = self->prod_head->next;
+
+    void *a = get(p1);
+    void *b = get(p2);
 
     while (true) {
         if (*(int*)a < *(int*)b) {
             put(self, a);
-            a = get(s1);
-            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
-                    self->id, *(int*)a, s1->id, nelem(&self->buffer));
+            a = get(p1);
+            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d\n",
+                    self->id, *(int*)a, p1->stream->id);
         } else {
             put(self, b);
-            b = get(s2);
-            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d buf_sz=%d\n",
-                    self->id, *(int*)b, s2->id, nelem(&self->buffer));
+            b = get(p2);
+            tprintf("\t\t\t\t\tMerge(%d): sent %d from Times %d\n",
+                    self->id, *(int*)b, p1->stream->id);
         }
     }
     pthread_exit(NULL);
 }
-*/
+
 
 void *consumer(void *stream)
 {
@@ -211,14 +222,12 @@ void *consumer(void *stream)
 
     for (i=0 ; i < 10 ; i++)
     {
-        sleep(1);
+        //sleep(1);
         p = self->prod_head;
         while (p != NULL)
         {
             value = get(p);
             tprintf("\t\t\t\t\t\t\tConsumer %d: got %d\n", self->id, *(int*)value);
-            //free(value);
-
             p = p->next;
         }
     }
@@ -235,13 +244,17 @@ void *consume_single(stream_t *stream) {
 /* initialize streams - see also queue_a.h and queue_a.c */
 void init_stream(stream_t *stream, void *data) {
     stream->id = idcnt++;
+    stream->data = data;
     pthread_mutex_init(&stream->lock, NULL);
     pthread_cond_init (&stream->notifier, NULL);
     stream->prod_head = NULL;
     stream->prod_curr = NULL;
-    stream->cons_head = NULL;
-    stream->cons_curr = NULL;
     stream->put_idx = 0;
+    stream->num_consumers = 0;
+    int i;
+    for (i=0; i<BUFFER_SIZE; i++)
+        stream->buffer_read_count[i] = 0;
+    sem_init(&stream->empty, 0, BUFFER_SIZE);
 }
 
 /* free allocated space in the queue - see queue_a.h and queue_a.c */
@@ -264,19 +277,7 @@ void stream_connect (stream_t *in, stream_t *out) {
         in->prod_curr = p;
     }
 
-    /* add the consumer to the producer list of consumers */
-    struct cons_list *c = (struct cons_list*)malloc(sizeof(struct cons_list));
-
-    c->prod = p;
-    c->next = NULL;
-
-    if (out->cons_head == NULL) {
-        out->cons_head = c;
-        out->cons_curr = c;
-    } else {
-        out->cons_curr->next = c;
-        out->cons_curr = c;
-    }
+    out->num_consumers++;
 }
 
 
