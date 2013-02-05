@@ -72,7 +72,7 @@ folder and can be build with `make tests`.
 
 Timestamped Prints
 -------------------
-Early on it was determined that the `printf`s from different threads would show
+Early on it was determined that the `printf`'s from different threads would show
 up out of order. This made is difficult to debug sequence sensitive events. To
 solve this problem a `tprintf` macro was created:
 
@@ -88,7 +88,7 @@ solve this problem a `tprintf` macro was created:
 
 The macro assumes that the struct `timeval tv` is declared in the calling
 function but that is all that is needed to utilize it. When it is called
-it records the current time. It then waits for a global `print_lock` mutex
+it records the current time and then waits for a global `print_lock` mutex
 to ensure that two printfs wont smash each other. It then prints out the
 recorded timestamp in microseconds followed by whatever the original printf
 arguments were. This allows us to now pipe our output through `sort -n` and
@@ -128,3 +128,4 @@ An attempt at creating a GUI similar to the provided Java example was made
 using GTK. Unfortunately it is only partially functional due to lack of time.
 The GUI can be build using `make gui`.
 
+![gui](https://raw.github.com/bear24rw/EECE4029/master/hw3_pthreads/gui/gui.png "GUI")
