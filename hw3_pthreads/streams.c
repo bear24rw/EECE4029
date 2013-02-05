@@ -1,24 +1,3 @@
-/* 07-prod-cons.c
-
-   Producer-consumer co-routining.  There are five producers and four
-   consumers.  Two successors put consecutive numbers into their respective
-   streams.  Two times consumers multiply all consumed numbers by 5 and 7
-   respectively and put the results into their streams.  A merge consumer
-   merges the two stream created by the times producers.  A consumer prints
-   tokens from the merge stream.  This  illustrates that producer-consumer
-   relationships can be formed into complex networks.
-
-   Each stream has a buffer of size 5 - producers can put up to 5 numbers
-   in their stream before waiting.
-
-   7,14,21,28...                1,2,3,4...
-   /--- Times 7 <---- successor
-   5,7,10,14...  /
-   consumer <--- merge <----<
-   \
-   \--- Times 5 <---- successor
-   5,10,15,20...              1,2,3,4...
-   */
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,9 +19,9 @@ pthread_mutex_t print_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int idcnt = 1;
 
-void *get(struct prod_list *producer)
+void *get(producer_t *producer)
 {
-    struct timeval tv;
+    //struct timeval tv;
     void *ret;  /* needed to take save a value from the critical section */
 
     int *buffer_idx          = &producer->buffer_idx;
@@ -96,7 +75,7 @@ void *get(struct prod_list *producer)
 
 void put(stream_t *stream, void *value)
 {
-    struct timeval tv;
+    //struct timeval tv;
     pthread_mutex_t *lock    = &stream->lock;
     pthread_cond_t *notifier = &stream->notifier;
     sem_t *empty             = &stream->empty;
@@ -108,8 +87,8 @@ void put(stream_t *stream, void *value)
 
     /* wait if all consumers haven't seen this value */
     while (stream->buffer_read_count[stream->put_idx] < stream->num_consumers) {
-        tprintf("Put read count at idx %d is %d, waiting\n", stream->put_idx, stream->buffer_read_count[stream->put_idx]);
-        tprintf("Num consumers: %d\n", stream->num_consumers);
+        //tprintf("Put read count at idx %d is %d, waiting\n", stream->put_idx, stream->buffer_read_count[stream->put_idx]);
+        //tprintf("Num consumers: %d\n", stream->num_consumers);
         pthread_cond_wait(notifier, lock);
     }
 
@@ -155,7 +134,7 @@ void *successor (void *stream) {
 void *times (void *stream) {
     struct timeval tv;
     stream_t *self = (stream_t *)stream;
-    struct prod_list *p = self->prod_head;
+    producer_t *p = self->prod_head;
     int multiplier = *(int*)self->data;
     int in;
     int *out;
@@ -191,8 +170,8 @@ void *merge (void *stream) {
 
     stream_t *self = (stream_t *)stream;
 
-    struct prod_list *p1 = self->prod_head;
-    struct prod_list *p2 = self->prod_head->next;
+    producer_t *p1 = self->prod_head;
+    producer_t *p2 = self->prod_head->next;
 
     void *a = get(p1);
     void *b = get(p2);
@@ -218,7 +197,7 @@ void *consumer(void *stream)
 {
     struct timeval tv;
     stream_t *self = (stream_t *)stream;
-    struct prod_list *p = self->prod_head;
+    producer_t *p = self->prod_head;
     int delay = *(int*)self->data;
     int i;
     void *value;
@@ -239,7 +218,7 @@ void *consumer(void *stream)
 }
 
 void *consume_single(stream_t *stream) {
-    struct prod_list *p = stream->prod_head;
+    producer_t *p = stream->prod_head;
     return get(p);
 }
 
@@ -266,7 +245,7 @@ void kill_stream(stream_t *stream) { }
 void stream_connect (stream_t *in, stream_t *out) {
 
     /* add the producer to the consumers list of producers */
-    struct prod_list *p = (struct prod_list*)malloc(sizeof(struct prod_list));
+    producer_t *p = (producer_t*)malloc(sizeof(producer_t));
 
     p->buffer_idx = out->put_idx;
     p->stream = out;
@@ -289,7 +268,7 @@ void stream_connect (stream_t *in, stream_t *out) {
 
 void stream_disconnect(stream_t *in, stream_t *out) {
 
-    struct prod_list *p = in->prod_head;
+    producer_t *p = in->prod_head;
 
     while (p != NULL)
     {
@@ -300,8 +279,13 @@ void stream_disconnect(stream_t *in, stream_t *out) {
                     p->next->prev = p->prev;
                 }
             }
-            free(p);
             out->num_consumers--;
+            int i;
+            for (i = 0; i < BUFFER_SIZE; i++)
+                if (p->stream->buffer_read_count[i] > 0)
+                    p->stream->buffer_read_count[i]--;
+
+            free(p);
             break;
         }
         p = p->next;

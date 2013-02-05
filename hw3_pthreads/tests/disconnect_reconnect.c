@@ -6,7 +6,7 @@
 
 void print_buffers(stream_t *stream)
 {
-    struct prod_list *p = stream->prod_head;
+    producer_t *p = stream->prod_head;
 
     int i;
     printf("VALUE | ");
@@ -37,9 +37,23 @@ void print_buffers(stream_t *stream)
 
 }
 
+void *suc(void *stream) {
+    stream_t *self = (stream_t*)stream;
+    int delay = *(int*)self->data;
+    int i, *value;
+
+    for (i=1 ; ; i++) {
+        sleep(delay);
+        value = (int*)malloc(sizeof(int));
+        *value = i;
+        put(self, (void*)value);
+    }
+    pthread_exit(NULL);
+}
+
 int main(void) {
     printf("01\t--------------------------------------------\n");
-    printf("02\t1 successor, 2 non threaded consumers");
+    printf("02\t1 successor, 2 non threaded consumers\n");
     printf("03\tConsumer 2 disconnects, consumer 1 continues\n");
     printf("04\tgetting token, consumer 2 reconnects\n");
     printf("03\t--------------------------------------------\n");
@@ -64,7 +78,7 @@ int main(void) {
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-    pthread_create(&s1, &attr, successor, (void*)&suc1);
+    pthread_create(&s1, &attr, suc, (void*)&suc1);
 
     printf("Both consumers connected\n");
     sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
@@ -85,7 +99,6 @@ int main(void) {
     sleep(con_delay); printf("  Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
     printf("Reconnecting consumer 2\n");
     sleep(con_delay); stream_connect(&cons2, &suc1);
-    //print_buffers(&cons2);
     sleep(con_delay); printf("Consumer 2 got: %d\n", *(int*)consume_single((void*)&cons2)); //print_buffers(&cons2);
     sleep(con_delay); printf("Consumer 2 got: %d\n", *(int*)consume_single((void*)&cons2)); //print_buffers(&cons2);
     sleep(con_delay); printf("Consumer 2 got: %d\n", *(int*)consume_single((void*)&cons2)); //print_buffers(&cons2);
@@ -104,9 +117,6 @@ int main(void) {
     sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
     sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
     sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
-    sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
-    sleep(con_delay); printf("Consumer 1 got: %d\n", *(int*)consume_single((void*)&cons1)); //print_buffers(&cons1);
-
 
     sleep(con_delay); printf("done\n");
 
