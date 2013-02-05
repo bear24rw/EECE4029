@@ -60,6 +60,8 @@ producers `buffer_read_count` array and decrement any value that is not zero to
 prevent the `get` or `put` functions from waiting for us to read, which will
 never happen now that we're disconnected.
 
+A unit test showing this in action can be found in `tests/disconnect_reconnect.c`
+
 Unit Tests
 ---------
 In order to test the multitude of configurations that can be setup a series of
