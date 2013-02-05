@@ -126,6 +126,6 @@ GUI
 ---
 An attempt at creating a GUI similar to the provided Java example was made
 using GTK. Unfortunately it is only partially functional due to lack of time.
-The GUI can be build using `make gui`.
+The GUI can be built using `make gui`.
 
 ![gui](https://raw.github.com/bear24rw/EECE4029/master/hw3_pthreads/gui/gui.png "GUI")
