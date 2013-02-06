@@ -67,10 +67,10 @@ Unit Tests
 In order to test the multitude of configurations that can be setup a series of
 unit tests were created. Each test sets up and runs a different stream
 configuration such as one producer to many consumers or many consumers to one
-producer. Having a series of tests that we could quickly build and verify
-against proved extreamly useful when trying to ensure that a fix for one
+producer. Having a series of tests that could be quickly build and verify
+against proved extremely useful when trying to ensure that a fix for one
 situation didn't break another. The unit tests can be found in the `tests/`
-folder and can be build with `make tests`.
+folder and can be built in batch with `make tests`.
 
 Timestamped Prints
 -------------------
@@ -94,7 +94,7 @@ it records the current time and then waits for a global `print_lock` mutex
 to ensure that two printfs wont smash each other. It then prints out the
 recorded timestamp in microseconds followed by whatever the original printf
 arguments were. This allows us to now pipe our output through `sort -n` and
-recreate the exact sequence of prints. This was enormously helpful in debugging
+recreate the proper sequence of prints. This was enormously helpful in debugging
 as the out of order prints can be deceiving sometimes.
 
 Main Test Configuration
