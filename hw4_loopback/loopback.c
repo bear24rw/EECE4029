@@ -22,11 +22,6 @@ struct net_device *os0, *os1;
 
 struct os_priv {
     struct net_device_stats stats;
-    int status;
-    int tx_packetlen;
-    u8 *tx_packetdata;
-    struct sk_buff *skb;
-    spinlock_t lock;
     struct net_device *dev;
 };
 
