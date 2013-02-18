@@ -115,7 +115,6 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     struct net_device *dest;
     u32 *saddr, *daddr;
     struct os_priv *priv_dest;
-    struct os_packet *tx_buffer;
 
     printk(KERN_INFO "loopback start xmit\n");
 
@@ -161,10 +160,9 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     dest = (dev == os0) ? os1 : os0;
 
     priv_dest = netdev_priv(dest);
-    tx_buffer = priv->pkt;
-    tx_buffer->datalen = len;
-    memcpy(tx_buffer->data, data, len);
-    priv_dest->pkt = tx_buffer;
+    priv->pkt->datalen = len;
+    memcpy(priv->pkt->data, data, len);
+    priv_dest->pkt = priv->pkt;
 
     spin_lock(&priv_dest->lock);
     os_rx(dest, priv_dest->pkt);
