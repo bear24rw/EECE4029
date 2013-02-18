@@ -164,19 +164,15 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     memcpy(priv->pkt->data, data, len);
     priv_dest->pkt = priv->pkt;
 
-    spin_lock(&priv_dest->lock);
     os_rx(dest, priv_dest->pkt);
-    spin_unlock(&priv_dest->lock);
 
 
     priv->tx_packetlen = len;
     priv->tx_packetdata = data;
 
-    spin_lock(&priv->lock);
     priv->stats.tx_packets++;
     priv->stats.tx_bytes += priv->tx_packetlen;
     dev_kfree_skb(priv->skb);
-    spin_unlock(&priv->lock);
 
 
     return NETDEV_TX_OK;
