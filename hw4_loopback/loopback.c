@@ -78,14 +78,12 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
 
     int len;
     char *data, shortpkt[ETH_ZLEN];
-    struct os_priv *priv = netdev_priv(dev);
 
     struct iphdr *ih;
     struct net_device *dest;
     u32 *saddr, *daddr;
-    struct os_priv *priv_dest;
 
-    struct sk_buff *skb2;
+    struct sk_buff *new_skb;
 
     printk(KERN_INFO "loopback start xmit\n");
 
@@ -101,16 +99,12 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     /* save time stamp */
     dev->trans_start = jiffies;
 
-    /* remember the skb so we can free it later */
-    priv->skb = skb;
-
-    /* ----------- snull_hw_tx ----------- */
-
+    /* get the ip header */
     ih = (struct iphdr *)(data+sizeof(struct ethhdr));
     saddr = &ih->saddr;
     daddr = &ih->daddr;
 
-    /* toggle the third octet */
+    /* toggle the third octet to switch the network */
     ((u8 *)saddr)[2] ^= 1;
     ((u8 *)daddr)[2] ^= 1;
 
@@ -118,51 +112,31 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     ih->check = 0;
     ih->check = ip_fast_csum((unsigned char *)ih, ih->ihl);
 
-    if (dev == os0)
-        printk(KERN_INFO "%08x:%05i --> %08x:%05i\n",
-                ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source),
-                ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest));
-    else
-        printk(KERN_INFO "%08x:%05i <-- %08x:%05i\n",
-                ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest),
-                ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source));
 
     /* destination is the other device */
     dest = (dev == os0) ? os1 : os0;
 
-    priv_dest = netdev_priv(dest);
-    priv->pkt->datalen = len;
-    memcpy(priv->pkt->data, data, len);
-    priv_dest->pkt = priv->pkt;
-
-
-    skb2 = dev_alloc_skb(len + 2);
+    /* allocate room for new packet */
+    new_skb = dev_alloc_skb(len + 2);
     if (!skb) {
         printk(KERN_INFO "os_rx: dropping packet\n");
-        priv_dest->stats.rx_dropped++;
         return 0;
     }
 
-    /* align IP on 16B boundary */
-    skb_reserve(skb2, 2);
-    memcpy(skb_put(skb2, len), data, len);
+    /* copy the data into it */
+    skb_reserve(new_skb, 2);
+    memcpy(skb_put(new_skb, len), data, len);
 
-    skb2->dev = dest;
-    skb2->protocol = eth_type_trans(skb2, dest);
-    skb2->ip_summed = CHECKSUM_UNNECESSARY;
+    /* set the device to the other one */
+    new_skb->dev = dest;
+    new_skb->protocol = eth_type_trans(new_skb, dest);
+    new_skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-    priv_dest->stats.rx_packets++;
-    priv_dest->stats.rx_bytes += len;
+    /* send it up the layers */
+    netif_rx(new_skb);
 
-    netif_rx(skb2);
-
-    priv->tx_packetlen = len;
-    priv->tx_packetdata = data;
-
-    priv->stats.tx_packets++;
-    priv->stats.tx_bytes += priv->tx_packetlen;
-    dev_kfree_skb(priv->skb);
-
+    /* we handled this packet so free it */
+    dev_kfree_skb(skb);
 
     return NETDEV_TX_OK;
 }
