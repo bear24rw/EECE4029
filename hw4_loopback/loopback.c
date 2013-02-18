@@ -9,10 +9,17 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/etherdevice.h>
 #include <linux/interrupt.h>
-#include <linux/skbuff.h>
 #include <linux/netdevice.h>
+#include <linux/etherdevice.h>
+
+#include <linux/skbuff.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+
+#define OS_RX_INTR 0x0001
+#define OS_TX_INTR 0x0002
 
 struct net_device *os0, *os1;
 
@@ -34,11 +41,68 @@ struct os_packet {
     u8 data[ETH_DATA_LEN];
 };
 
+void os_rx(struct net_device *dev, struct os_packet *pkt) {
+    struct sk_buff *skb;
+    struct os_priv *priv = netdev_priv(dev);
+
+    skb = dev_alloc_skb(pkt->datalen + 2);
+    if (!skb) {
+        printk(KERN_INFO "os_rx: dropping packet\n");
+        priv->stats.rx_dropped++;
+        goto out;
+    }
+
+    /* align IP on 16B boundary */
+    skb_reserve(skb, 2);
+    memcpy(skb_put(skb, pkt->datalen), pkt->data, pkt->datalen);
+
+    skb->dev = dev;
+    skb->protocol = eth_type_trans(skb, dev);
+    skb->ip_summed = CHECKSUM_UNNECESSARY;
+
+    priv->stats.rx_packets++;
+    priv->stats.rx_bytes += pkt->datalen;
+
+    netif_rx(skb);
+
+out:
+    return;
+}
+
+void os_interrupt(struct net_device *dev) {
+    int statusword;
+    struct os_priv *priv;
+    //struct os_packet *pkt = NULL;
+
+    if (!dev) return;
+
+    /* lock the device */
+    priv = netdev_priv(dev);
+    spin_lock(&priv->lock);
+
+    /* retrieve status word */
+    statusword = priv->status;
+    priv->status = 0;
+    if (statusword & OS_RX_INTR) {
+        os_rx(dev, priv->pkt);
+    }
+    if (statusword & OS_TX_INTR) {
+        priv->stats.tx_packets++;
+        priv->stats.tx_bytes += priv->tx_packetlen;
+        dev_kfree_skb(priv->skb);
+    }
+
+    /* unlock the device */
+    spin_unlock(&priv->lock);
+}
+
+
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
         unsigned short type, const void *daddr, const void *saddr,
         unsigned int len) {
 
     struct ethhdr *eth = (struct ethhdr *)skb_push(skb, ETH_HLEN);
+
     eth->h_proto = htons(type);
 
     memcpy(eth->h_source, dev->dev_addr, dev->addr_len);
@@ -69,45 +133,86 @@ int os_open(struct net_device *dev) { netif_start_queue(dev); return 0;}
 int os_stop(struct net_device *dev) { netif_stop_queue(dev); return 0;}
 
 int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
-    struct sk_buff *skb2;
+
+    int len;
+    char *data, shortpkt[ETH_ZLEN];
+    struct os_priv *priv = netdev_priv(dev);
+
+    struct iphdr *ih;
+    struct net_device *dest;
+    u32 *saddr, *daddr;
+    struct os_priv *priv_dest;
+    struct os_packet *tx_buffer;
+
     printk(KERN_INFO "loopback start xmit\n");
 
-    //netif_stop_queue(dev);
-
-    //skb2 = netdev_alloc_skb(dev, skb->len);
-    /*
-    skb2 = dev_alloc_skb(skb->len);
-    skb2->len = skb->len;
-    skb2->
-    if (!skb2) {
-        printk(KERN_INFO "packet dropped\n");
-        return -ENOMEM;
+    data = skb->data;
+    len = skb->len;
+    if (len < ETH_ZLEN) {
+        memset(shortpkt, 0, ETH_ZLEN);
+        memcpy(shortpkt, skb->data, skb->len);
+        len = ETH_ZLEN;
+        data = shortpkt;
     }
 
-    skb_reserve(skb2, NET_IP_ALIGN);
-    skb2->protocol = eth_type_trans(skb, dev);
-    skb2->ip_summed = CHECKSUM_UNNECESSARY;
+    /* save time stamp */
+    dev->trans_start = jiffies;
 
-    netif_rx_ni(skb2);
-    */
+    /* remember the skb so we can free it later */
+    priv->skb = skb;
 
-    //skb->dev = dev;
-    //skb->ip_summed = CHECKSUM_UNNECESSARY;
-    //skb2 = skb_copy(skb, GFP_ATOMIC);
+    /* ----------- snull_hw_tx ----------- */
 
-    //netif_rx_ni(skb);
+    ih = (struct iphdr *)(data+sizeof(struct ethhdr));
+    saddr = &ih->saddr;
+    daddr = &ih->daddr;
+
+    /* toggle the third octet */
+    ((u8 *)saddr)[2] ^= 1;
+    ((u8 *)daddr)[2] ^= 1;
+
+    /* rebuild the checksum */
+    ih->check = 0;
+    ih->check = ip_fast_csum((unsigned char *)ih, ih->ihl);
+
+    if (dev == os0)
+        printk(KERN_INFO "%08x:%05i --> %08x:%05i\n",
+                ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source),
+                ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest));
+    else
+        printk(KERN_INFO "%08x:%05i <-- %08x:%05i\n",
+                ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest),
+                ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source));
+
+    /* destination is the other device */
+    dest = (dev == os0) ? os1 : os0;
+
+    priv_dest = netdev_priv(dest);
+    tx_buffer = priv->pkt;
+    tx_buffer->datalen = len;
+    memcpy(tx_buffer->data, data, len);
+    priv_dest->pkt = tx_buffer;
+    priv_dest->status |= OS_RX_INTR;
+    os_interrupt(dest);
+
+    priv->tx_packetlen = len;
+    priv->tx_packetdata = data;
+    priv->status |= OS_TX_INTR;
+    os_interrupt(dev);
 
     return NETDEV_TX_OK;
 }
 
 struct net_device_stats *os_stats(struct net_device *dev) {
+    struct os_priv *priv = netdev_priv(dev);
     printk(KERN_INFO "loopback local get stats\n");
-    return &dev->stats;
+    return &priv->stats;
 }
 
 
 static const struct header_ops os_header_ops = {
     .create  = os_create_header,
+    .cache   = NULL,
 };
 
 static const struct net_device_ops os_device_ops = {
@@ -135,9 +240,6 @@ static int __init init_mod(void)
         return -ENOMEM;
     }
 
-    priv0 = netdev_priv(os0);
-    priv1 = netdev_priv(os1);
-
     for (i=0; i<6; i++) os0->dev_addr[i] = (unsigned char)i;
     for (i=0; i<6; i++) os0->broadcast[i] = (unsigned char)0xFF;
     for (i=0; i<6; i++) os1->dev_addr[i] = (unsigned char)i;
@@ -158,6 +260,9 @@ static int __init init_mod(void)
 
     os0->flags |= IFF_NOARP;
     os1->flags |= IFF_NOARP;
+
+    priv0 = netdev_priv(os0);
+    priv1 = netdev_priv(os1);
 
     memset(priv0, 0, sizeof(struct os_priv));
     memset(priv1, 0, sizeof(struct os_priv));
