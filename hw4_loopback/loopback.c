@@ -18,9 +18,6 @@
 #include <linux/ip.h>
 #include <linux/tcp.h>
 
-#define OS_RX_INTR 0x0001
-#define OS_TX_INTR 0x0002
-
 struct net_device *os0, *os1;
 
 struct os_priv {
@@ -40,34 +37,6 @@ struct os_packet {
     int datalen;
     u8 data[ETH_DATA_LEN];
 };
-
-void os_rx(struct net_device *dev, struct os_packet *pkt) {
-    struct sk_buff *skb;
-    struct os_priv *priv = netdev_priv(dev);
-
-    skb = dev_alloc_skb(pkt->datalen + 2);
-    if (!skb) {
-        printk(KERN_INFO "os_rx: dropping packet\n");
-        priv->stats.rx_dropped++;
-        goto out;
-    }
-
-    /* align IP on 16B boundary */
-    skb_reserve(skb, 2);
-    memcpy(skb_put(skb, pkt->datalen), pkt->data, pkt->datalen);
-
-    skb->dev = dev;
-    skb->protocol = eth_type_trans(skb, dev);
-    skb->ip_summed = CHECKSUM_UNNECESSARY;
-
-    priv->stats.rx_packets++;
-    priv->stats.rx_bytes += pkt->datalen;
-
-    netif_rx(skb);
-
-out:
-    return;
-}
 
 
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
@@ -115,6 +84,8 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     struct net_device *dest;
     u32 *saddr, *daddr;
     struct os_priv *priv_dest;
+
+    struct sk_buff *skb2;
 
     printk(KERN_INFO "loopback start xmit\n");
 
@@ -164,8 +135,26 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     memcpy(priv->pkt->data, data, len);
     priv_dest->pkt = priv->pkt;
 
-    os_rx(dest, priv_dest->pkt);
 
+    skb2 = dev_alloc_skb(len + 2);
+    if (!skb) {
+        printk(KERN_INFO "os_rx: dropping packet\n");
+        priv_dest->stats.rx_dropped++;
+        return 0;
+    }
+
+    /* align IP on 16B boundary */
+    skb_reserve(skb2, 2);
+    memcpy(skb_put(skb2, len), data, len);
+
+    skb2->dev = dest;
+    skb2->protocol = eth_type_trans(skb2, dest);
+    skb2->ip_summed = CHECKSUM_UNNECESSARY;
+
+    priv_dest->stats.rx_packets++;
+    priv_dest->stats.rx_bytes += len;
+
+    netif_rx(skb2);
 
     priv->tx_packetlen = len;
     priv->tx_packetdata = data;
