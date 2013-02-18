@@ -72,6 +72,7 @@ out:
 void os_interrupt(struct net_device *dev) {
     int statusword;
     struct os_priv *priv;
+    //struct os_packet *pkt = NULL;
 
     if (!dev) return;
 
@@ -131,17 +132,17 @@ int os_create_header(struct sk_buff *skb, struct net_device *dev,
 int os_open(struct net_device *dev) { netif_start_queue(dev); return 0;}
 int os_stop(struct net_device *dev) { netif_stop_queue(dev); return 0;}
 
-int os_start_xmit(struct sk_buff *skb, struct net_device *dev_src) {
+int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
 
     int len;
     char *data, shortpkt[ETH_ZLEN];
-
-    struct net_device *dev_dst;
-    struct os_priv *priv_src = netdev_priv(dev_src);
-    struct os_priv *priv_dst;
+    struct os_priv *priv = netdev_priv(dev);
 
     struct iphdr *ih;
+    struct net_device *dest;
     u32 *saddr, *daddr;
+    struct os_priv *priv_dest;
+    struct os_packet *tx_buffer;
 
     printk(KERN_INFO "loopback start xmit\n");
 
@@ -155,10 +156,10 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev_src) {
     }
 
     /* save time stamp */
-    dev_src->trans_start = jiffies;
+    dev->trans_start = jiffies;
 
     /* remember the skb so we can free it later */
-    priv_src->skb = skb;
+    priv->skb = skb;
 
     /* ----------- snull_hw_tx ----------- */
 
@@ -174,7 +175,7 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev_src) {
     ih->check = 0;
     ih->check = ip_fast_csum((unsigned char *)ih, ih->ihl);
 
-    if (dev_src == os0)
+    if (dev == os0)
         printk(KERN_INFO "%08x:%05i --> %08x:%05i\n",
                 ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source),
                 ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest));
@@ -183,21 +184,21 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev_src) {
                 ntohl(ih->daddr),ntohs(((struct tcphdr *)(ih+1))->dest),
                 ntohl(ih->saddr),ntohs(((struct tcphdr *)(ih+1))->source));
 
-    priv_src->pkt->datalen = len;
-    memcpy(priv_src->pkt->data, data, len);
-
     /* destination is the other device */
-    dev_dst = (dev_src == os0) ? os1 : os0;
+    dest = (dev == os0) ? os1 : os0;
 
-    priv_dst = netdev_priv(dev_dst);
-    priv_dst->pkt = priv_src->pkt;
-    priv_dst->status |= OS_RX_INTR;
-    os_interrupt(dev_dst);
+    priv_dest = netdev_priv(dest);
+    tx_buffer = priv->pkt;
+    tx_buffer->datalen = len;
+    memcpy(tx_buffer->data, data, len);
+    priv_dest->pkt = tx_buffer;
+    priv_dest->status |= OS_RX_INTR;
+    os_interrupt(dest);
 
-    priv_src->tx_packetlen = len;
-    priv_src->tx_packetdata = data;
-    priv_src->status |= OS_TX_INTR;
-    os_interrupt(dev_src);
+    priv->tx_packetlen = len;
+    priv->tx_packetdata = data;
+    priv->status |= OS_TX_INTR;
+    os_interrupt(dev);
 
     return NETDEV_TX_OK;
 }
