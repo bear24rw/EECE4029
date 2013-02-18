@@ -69,33 +69,6 @@ out:
     return;
 }
 
-void os_interrupt(struct net_device *dev) {
-    int statusword;
-    struct os_priv *priv;
-    //struct os_packet *pkt = NULL;
-
-    if (!dev) return;
-
-    /* lock the device */
-    priv = netdev_priv(dev);
-    spin_lock(&priv->lock);
-
-    /* retrieve status word */
-    statusword = priv->status;
-    priv->status = 0;
-    if (statusword & OS_RX_INTR) {
-        os_rx(dev, priv->pkt);
-    }
-    if (statusword & OS_TX_INTR) {
-        priv->stats.tx_packets++;
-        priv->stats.tx_bytes += priv->tx_packetlen;
-        dev_kfree_skb(priv->skb);
-    }
-
-    /* unlock the device */
-    spin_unlock(&priv->lock);
-}
-
 
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
         unsigned short type, const void *daddr, const void *saddr,
@@ -192,13 +165,21 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     tx_buffer->datalen = len;
     memcpy(tx_buffer->data, data, len);
     priv_dest->pkt = tx_buffer;
-    priv_dest->status |= OS_RX_INTR;
-    os_interrupt(dest);
+
+    spin_lock(&priv_dest->lock);
+    os_rx(dest, priv_dest->pkt);
+    spin_unlock(&priv_dest->lock);
+
 
     priv->tx_packetlen = len;
     priv->tx_packetdata = data;
-    priv->status |= OS_TX_INTR;
-    os_interrupt(dev);
+
+    spin_lock(&priv->lock);
+    priv->stats.tx_packets++;
+    priv->stats.tx_bytes += priv->tx_packetlen;
+    dev_kfree_skb(priv->skb);
+    spin_unlock(&priv->lock);
+
 
     return NETDEV_TX_OK;
 }
