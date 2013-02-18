@@ -76,19 +76,23 @@ int os_stop(struct net_device *dev) { netif_stop_queue(dev); return 0;}
 
 int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
 
-    int len;
-    char *data, shortpkt[ETH_ZLEN];
+    int len;                    /* length of data in buffer */
+    char *data;                 /* data is other directly from skb or the new padded buffer */
+    char shortpkt[ETH_ZLEN];    /* if skb is too short we need copy it to new buffer and pad it */
 
-    struct iphdr *ih;
-    struct net_device *dest;
-    u32 *saddr, *daddr;
+    struct iphdr *ih;           /* ip header so we can flip the 3 octets */
+    u32 *saddr, *daddr;         /* source and dest in the ip header */
 
-    struct sk_buff *new_skb;
+    struct net_device *dest;    /* destination device (opposite of xmit device) */
+    struct sk_buff *new_skb;    /* packet we'll fill and say we recieved */
 
     printk(KERN_INFO "loopback start xmit\n");
 
+    /* pull data and length out of the socket buffer */
     data = skb->data;
     len = skb->len;
+
+    /* if legnth is too short pad it with 0s */
     if (len < ETH_ZLEN) {
         memset(shortpkt, 0, ETH_ZLEN);
         memcpy(shortpkt, skb->data, skb->len);
@@ -112,10 +116,6 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     ih->check = 0;
     ih->check = ip_fast_csum((unsigned char *)ih, ih->ihl);
 
-
-    /* destination is the other device */
-    dest = (dev == os0) ? os1 : os0;
-
     /* allocate room for new packet */
     new_skb = dev_alloc_skb(len + 2);
     if (!skb) {
@@ -126,6 +126,9 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     /* copy the data into it */
     skb_reserve(new_skb, 2);
     memcpy(skb_put(new_skb, len), data, len);
+
+    /* destination is the other device */
+    dest = (dev == os0) ? os1 : os0;
 
     /* set the device to the other one */
     new_skb->dev = dest;
@@ -183,11 +186,14 @@ static int __init init_mod(void)
     for (i=0; i<6; i++) os1->dev_addr[i] = (unsigned char)i;
     for (i=0; i<6; i++) os1->broadcast[i] = (unsigned char)0xFF;
 
+    /* set one of the devices to end in 6 so we have two different addresses */
     os1->dev_addr[5] = 0x6;
 
+    /* set the names of the devices */
     memcpy(os0->name, "os0", 10);
     memcpy(os1->name, "os1", 10);
 
+    /* set the callback functions */
     os0->netdev_ops = &os_device_ops;
     os0->header_ops = &os_header_ops;
     os1->netdev_ops = &os_device_ops;
@@ -196,21 +202,26 @@ static int __init init_mod(void)
     os0->hard_header_len = 14;
     os1->hard_header_len = 14;
 
+    /* disable ARP since we won't response to it */
     os0->flags |= IFF_NOARP;
     os1->flags |= IFF_NOARP;
 
+    /* get pointer to private area */
     priv0 = netdev_priv(os0);
     priv1 = netdev_priv(os1);
 
+    /* clear the private area */
     memset(priv0, 0, sizeof(struct os_priv));
     memset(priv1, 0, sizeof(struct os_priv));
 
+    /* set the device */
     priv0->dev = os0;
     priv1->dev = os1;
 
     priv0->rx_int_enabled = 1;
     priv1->rx_int_enabled = 1;
 
+    /* allocate space for 1 packet */
     priv0->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
     priv1->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
 
@@ -220,11 +231,10 @@ static int __init init_mod(void)
     spin_lock_init(&priv0->lock);
     spin_lock_init(&priv1->lock);
 
-    if (register_netdev(os0)) printk(KERN_INFO "error registering os0\n");
-    else printk(KERN_INFO "os0 registered\n");
-
-    if (register_netdev(os1)) printk(KERN_INFO "error registering os1\n");
-    else printk(KERN_INFO "os1 registered\n");
+    if (register_netdev(os0) || register_netdev(os1))
+        printk(KERN_INFO "error registering os0 or os1\n");
+    else
+        printk(KERN_INFO "os0 and os1 registered\n");
 
     printk(KERN_INFO "loopback: Module loaded successfully\n");
     return 0;
