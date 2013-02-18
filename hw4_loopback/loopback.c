@@ -23,22 +23,12 @@ struct net_device *os0, *os1;
 struct os_priv {
     struct net_device_stats stats;
     int status;
-    //struct os_packet *pkt;
-    int rx_int_enabled;
     int tx_packetlen;
     u8 *tx_packetdata;
     struct sk_buff *skb;
     spinlock_t lock;
     struct net_device *dev;
 };
-/*
-struct os_packet {
-    struct net_device *dev;
-    int datalen;
-    u8 data[ETH_DATA_LEN];
-};
-*/
-
 
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
         unsigned short type, const void *daddr, const void *saddr,
@@ -230,19 +220,6 @@ static int __init init_mod(void)
     /* set the device */
     priv0->dev = os0;
     priv1->dev = os1;
-
-    priv0->rx_int_enabled = 1;
-    priv1->rx_int_enabled = 1;
-
-    /* allocate space for 1 packet */
-    //priv0->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
-    //priv1->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
-
-    //priv0->pkt->dev = os0;
-    //priv1->pkt->dev = os1;
-
-    spin_lock_init(&priv0->lock);
-    spin_lock_init(&priv1->lock);
 
     if (register_netdev(os0) || register_netdev(os1))
         printk(KERN_INFO "error registering os0 or os1\n");
