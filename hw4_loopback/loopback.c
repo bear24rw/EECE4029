@@ -25,12 +25,17 @@ struct os_priv {
     struct net_device *dev;
 };
 
+int os_open(struct net_device *dev) { netif_start_queue(dev); return 0; }
+int os_stop(struct net_device *dev) { netif_stop_queue(dev); return 0; }
+
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
         unsigned short type, const void *daddr, const void *saddr,
-        unsigned int len) {
+        unsigned int len)
+{
 
     struct ethhdr *eth = (struct ethhdr *)skb_push(skb, ETH_HLEN);
 
+    /* convert byte order */
     eth->h_proto = htons(type);
 
     /* set the source address to our mac address */
@@ -47,12 +52,8 @@ int os_create_header(struct sk_buff *skb, struct net_device *dev,
     return dev->hard_header_len;
 }
 
-
-int os_open(struct net_device *dev) { netif_start_queue(dev); return 0;}
-int os_stop(struct net_device *dev) { netif_stop_queue(dev); return 0;}
-
-int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
-
+int os_start_xmit(struct sk_buff *skb, struct net_device *dev)
+{
     int len;                    /* length of data in buffer */
     char *data;                 /* data is other directly from skb or the new padded buffer */
     char shortpkt[ETH_ZLEN];    /* if skb is too short we need copy it to new buffer and pad it */
@@ -128,7 +129,6 @@ struct net_device_stats *os_stats(struct net_device *dev) {
     return &priv->stats;
 }
 
-
 static const struct header_ops os_header_ops = {
     .create  = os_create_header,
     .cache   = NULL,
@@ -140,7 +140,6 @@ static const struct net_device_ops os_device_ops = {
     .ndo_get_stats = os_stats,
     .ndo_start_xmit = os_start_xmit,
 };
-
 
 /*
  * Module entry point
@@ -159,9 +158,10 @@ static int __init init_mod(void)
         return -ENOMEM;
     }
 
+    /* setup mac and broadcast addresses */
     for (i=0; i<6; i++) os0->dev_addr[i] = (unsigned char)i;
-    for (i=0; i<6; i++) os0->broadcast[i] = (unsigned char)0xFF;
     for (i=0; i<6; i++) os1->dev_addr[i] = (unsigned char)i;
+    for (i=0; i<6; i++) os0->broadcast[i] = (unsigned char)0xFF;
     for (i=0; i<6; i++) os1->broadcast[i] = (unsigned char)0xFF;
 
     /* set one of the devices to end in 6 so we have two different addresses */
