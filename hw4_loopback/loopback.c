@@ -23,7 +23,7 @@ struct net_device *os0, *os1;
 struct os_priv {
     struct net_device_stats stats;
     int status;
-    struct os_packet *pkt;
+    //struct os_packet *pkt;
     int rx_int_enabled;
     int tx_packetlen;
     u8 *tx_packetdata;
@@ -31,12 +31,13 @@ struct os_priv {
     spinlock_t lock;
     struct net_device *dev;
 };
-
+/*
 struct os_packet {
     struct net_device *dev;
     int datalen;
     u8 data[ETH_DATA_LEN];
 };
+*/
 
 
 int os_create_header(struct sk_buff *skb, struct net_device *dev,
@@ -47,9 +48,11 @@ int os_create_header(struct sk_buff *skb, struct net_device *dev,
 
     eth->h_proto = htons(type);
 
+    /* set the source address to our mac address */
     memcpy(eth->h_source, dev->dev_addr, dev->addr_len);
-    memcpy(eth->h_dest, eth->h_source, dev->addr_len);
 
+    /* set the destination address to the other mac address */
+    memcpy(eth->h_dest, eth->h_source, dev->addr_len);
     eth->h_dest[ETH_ALEN-1] = (eth->h_dest[ETH_ALEN-1] == 5) ? 6 : 5;
 
     printk("created packet from %x:%x:%x:%x:%x:%x to %x:%x:%x:%x:%x:%x\n",
@@ -111,6 +114,16 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev) {
     /* toggle the third octet to switch the network */
     ((u8 *)saddr)[2] ^= 1;
     ((u8 *)daddr)[2] ^= 1;
+
+    printk(KERN_INFO "%d.%d.%d.%d --> %d.%d.%d.%d\n",
+            ((u8 *)saddr)[0],
+            ((u8 *)saddr)[1],
+            ((u8 *)saddr)[2],
+            ((u8 *)saddr)[3],
+            ((u8 *)daddr)[0],
+            ((u8 *)daddr)[1],
+            ((u8 *)daddr)[2],
+            ((u8 *)daddr)[3]);
 
     /* rebuild the checksum */
     ih->check = 0;
@@ -222,11 +235,11 @@ static int __init init_mod(void)
     priv1->rx_int_enabled = 1;
 
     /* allocate space for 1 packet */
-    priv0->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
-    priv1->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
+    //priv0->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
+    //priv1->pkt = kmalloc(sizeof(struct os_packet), GFP_KERNEL);
 
-    priv0->pkt->dev = os0;
-    priv1->pkt->dev = os1;
+    //priv0->pkt->dev = os0;
+    //priv1->pkt->dev = os1;
 
     spin_lock_init(&priv0->lock);
     spin_lock_init(&priv1->lock);
@@ -250,13 +263,13 @@ static void __exit exit_mod(void)
 
     if (os0) {
         priv0 = netdev_priv(os0);
-        kfree(priv0->pkt);
+        //kfree(priv0->pkt);
         unregister_netdev(os0);
     }
 
     if (os1) {
         priv1 = netdev_priv(os1);
-        kfree(priv1->pkt);
+        //kfree(priv1->pkt);
         unregister_netdev(os1);
     }
 
