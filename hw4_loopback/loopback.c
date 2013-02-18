@@ -45,7 +45,7 @@ int os_create_header(struct sk_buff *skb, struct net_device *dev,
     memcpy(eth->h_dest, eth->h_source, dev->addr_len);
     eth->h_dest[ETH_ALEN-1] = (eth->h_dest[ETH_ALEN-1] == 5) ? 6 : 5;
 
-    printk(KERN_INFO "loopback: created packet from %x:%x:%x:%x:%x:%x to %x:%x:%x:%x:%x:%x\n",
+    printk(KERN_INFO "loopback: created packet from %x:%x:%x:%x:%x:%x --> %x:%x:%x:%x:%x:%x\n",
             eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5],
             eth->h_dest[0],   eth->h_dest[1],   eth->h_dest[2],   eth->h_dest[3],   eth->h_dest[4],   eth->h_dest[5]);
 
@@ -88,7 +88,7 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev)
     ((u8 *)saddr)[2] ^= 1;
     ((u8 *)daddr)[2] ^= 1;
 
-    printk(KERN_INFO "loopback: %d.%d.%d.%d --> %d.%d.%d.%d\n",
+    printk(KERN_INFO "loopback: sending packet from %d.%d.%d.%d --> %d.%d.%d.%d\n",
             ((u8 *)saddr)[0], ((u8 *)saddr)[1], ((u8 *)saddr)[2], ((u8 *)saddr)[3],
             ((u8 *)daddr)[0], ((u8 *)daddr)[1], ((u8 *)daddr)[2], ((u8 *)daddr)[3]);
 
