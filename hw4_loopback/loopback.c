@@ -58,10 +58,10 @@ int os_create_header(struct sk_buff *skb, struct net_device *dev,
 int os_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
     int len;                    /* length of data in buffer */
-    char *data;                 /* data is other directly from skb or the new padded buffer */
+    char *data;                 /* data is either directly from skb or the new padded buffer */
     char shortpkt[ETH_ZLEN];    /* if skb is too short we need copy it to new buffer and pad it */
 
-    struct iphdr *ih;           /* ip header so we can flip the 3 octets */
+    struct iphdr *ih;           /* ip header so we can flip the 3rd octet */
     u32 *saddr, *daddr;         /* source and dest in the ip header */
 
     struct net_device *dest;    /* destination device (opposite of xmit device) */
