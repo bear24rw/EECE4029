@@ -101,7 +101,7 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
     /* allocate a new buffer for the rx side */
     new_skb = dev_alloc_skb(len + 2);
-    if (!skb) {
+    if (!new_skb) {
         printk(KERN_INFO "loopback: dropping packet\n");
         return 0;
     }
