@@ -1,11 +1,11 @@
 Network Loopback Driver
 =====================
 
-This module implement a network loopback in the form of two network devices,
-os0 and os1.  Packets sent out os0 will be received by os1 and vica versa.
-It implements the absolute minimum nessesary to achive the same basic
-functionality of the `snull` device driver found in chapter 14 of [Linux Device
-Drivers](http://www.xml.com/ldd/chapter/book/).
+This module implements a network loopback in the form of two network devices,
+`os0` and `os1`.  Packets sent out `os0` to `remote0` will be received by `os1`
+from `remote1` and vica versa.  It implements the absolute minimum nessesary to
+achieve the same basic functionality of the `snull` device driver found in
+chapter 14 of [Linux Device Drivers](http://www.xml.com/ldd/chapter/book/).
 
 Network Setup
 -------------
@@ -16,7 +16,7 @@ is shown below:
 
 Any packets sent from `local0` to `remote0` get looped back and sent from
 `remote1` to `local1`.  The same happens in reverse with packets sent from
-`local1`. This creates the illusion that `local0` is talking to remote0 when in
+`local1`. This creates the illusion that `local0` is talking to `remote0` when in
 reality it is talking to `local1`. `local1` thinks that it is getting a packet
 from `remote1` when in reality that packet was sent from `local0`.
 
@@ -94,6 +94,11 @@ between the IP addresses as explained earlier.
 ```
 Feb 18 19:30:05 gentoovm kernel: loopback: created packet from 0:1:2:3:4:5 --> 0:1:2:3:4:6
 Feb 18 19:30:05 gentoovm kernel: loopback: sending packet from 10.0.1.1 --> 10.0.1.2
+```
+
+The ping reply shows the opposite:
+
+```
 Feb 18 19:30:05 gentoovm kernel: loopback: created packet from 0:1:2:3:4:6 --> 0:1:2:3:4:5
 Feb 18 19:30:05 gentoovm kernel: loopback: sending packet from 10.0.0.2 --> 10.0.0.1
 ```
