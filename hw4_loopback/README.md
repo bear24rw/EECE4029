@@ -14,11 +14,11 @@ is shown below:
 
 ![network](http://www.xml.com/ldd/chapter/book/figs/ldr2_1401.gif "network")
 
-Any packets sent from `local0` to `remote0` get looped back and sent from
-`remote1` to `local1`.  The same happens in reverse with packets sent from
-`local1`. This creates the illusion that `local0` is talking to `remote0` when in
-reality it is talking to `local1`. `local1` thinks that it is getting a packet
-from `remote1` when in reality that packet was sent from `local0`.
+Any packets sent from `local0` to `remote0` get looped back and sent to `local1`
+from `remote1`.  The same happens in reverse with packets sent from `local1`.
+This creates the illusion that `local0` is talking to `remote0` when in reality
+it is talking to `local1`. `local1` thinks that it is getting a packet from
+`remote1` when in reality that packet was sent from `local0`.
 
 In order to help visualize these transfers we can enter the following hosts
 into `/etc/hosts`
@@ -38,8 +38,8 @@ loopback the packet.
 The network interfaces can be brought up using:
 
 ```
-sudo ifconfig os0 10.0.0.1 netmask 255.255.255.0 broadcast 10.0.0.255
-sudo ifconfig os1 10.0.1.2 netmask 255.255.255.0 broadcast 10.0.1.255
+sudo ifconfig os0 local0 netmask 255.255.255.0 broadcast 10.0.0.255
+sudo ifconfig os1 local1 netmask 255.255.255.0 broadcast 10.0.1.255
 ```
 
 Demonstration
@@ -73,7 +73,6 @@ look at `os1` now:
 
 ```
 user@gentoovm ~/tcpdump (master) % sudo ./tcpdump -i os1
-tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
 listening on os1, link-type EN10MB (Ethernet), capture size 65535 bytes
 19:23:38.101464 IP remote1 > local1: ICMP echo request, id 15267, seq 297, length 64
 19:23:38.101478 IP local1 > remote1: ICMP echo reply, id 15267, seq 297, length 64
