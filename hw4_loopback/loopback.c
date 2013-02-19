@@ -99,21 +99,21 @@ int os_start_xmit(struct sk_buff *skb, struct net_device *dev)
     ih->check = 0;
     ih->check = ip_fast_csum((unsigned char *)ih, ih->ihl);
 
-    /* allocate room for new packet */
+    /* allocate a new buffer for the rx side */
     new_skb = dev_alloc_skb(len + 2);
     if (!skb) {
         printk(KERN_INFO "loopback: dropping packet\n");
         return 0;
     }
 
-    /* copy the data into it */
+    /* copy the xmit data into it */
     skb_reserve(new_skb, 2);
     memcpy(skb_put(new_skb, len), data, len);
 
     /* destination is the other device */
     dest = (dev == os0) ? os1 : os0;
 
-    /* set the device to the other one */
+    /* set the device, protocol, and checksum flag */
     new_skb->dev = dest;
     new_skb->protocol = eth_type_trans(new_skb, dest);
     new_skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -134,7 +134,6 @@ struct net_device_stats *os_stats(struct net_device *dev) {
 
 static const struct header_ops os_header_ops = {
     .create  = os_create_header,
-    .cache   = NULL,
 };
 
 static const struct net_device_ops os_device_ops = {
