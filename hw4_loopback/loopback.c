@@ -4,6 +4,9 @@
  * EECE4029 - Introduction to Operating Systems
  * Assignment 3 - Network Device Driver Loopback
  *
+ * Writeup can be found here:
+ * https://github.com/bear24rw/EECE4029/tree/master/hw4_loopback
+ *
  */
 
 #include <linux/module.h>
