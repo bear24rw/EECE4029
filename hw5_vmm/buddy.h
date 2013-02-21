@@ -20,8 +20,9 @@ struct pair_t {
 
 struct pair_t *pool_head;
 
-int buddy_alloc(pair_t *p, int size, int level);
-int buddy_free(pair_t *p, int idx, int level);
+int buddy_alloc(pair_t *p, int size);
+int buddy_free(pair_t *p, int idx);
+int buddy_get_size(pair_t *p, int idx);
 void print_tree(pair_t *p);
 
 #endif

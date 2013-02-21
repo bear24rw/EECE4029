@@ -4,17 +4,17 @@
 
 int pool_free = POOL_SIZE;
 
-int buddy_alloc(pair_t *p, int size, int level)
+int buddy_alloc(pair_t *p, int size)
 {
     int rt = -1;
 
     // if there is a pair below us, try them
     if (p->state == SPLIT) {
 
-        rt = buddy_alloc(p->left, size, level+1);
+        rt = buddy_alloc(p->left, size);
         if (rt >= 0) return rt;
 
-        return buddy_alloc(p->right, size, level+1);
+        return buddy_alloc(p->right, size);
     }
 
     // if were not free return error
@@ -25,7 +25,7 @@ int buddy_alloc(pair_t *p, int size, int level)
 
     // we have enough space to make another pair
     if (p->size / 2 >= size) {
-        //printf("splitting (level %d size %d idx %d)\n", level, p->size, p->idx);
+        //printf("splitting (size %d idx %d)\n", p->size, p->idx);
         p->state = SPLIT;
 
         // make a new pair
@@ -40,19 +40,19 @@ int buddy_alloc(pair_t *p, int size, int level)
         p->left->left = NULL;
         p->right->right = NULL;
 
-        return buddy_alloc(p->left, size, level+1);
+        return buddy_alloc(p->left, size);
 
     }
 
     // just allocate it here
     // we're no longer free
-    //printf("allocating idx %d (level %d)\n", p->idx, level);
+    //printf("allocating idx %d \n", p->idx);
     p->state = ALLOC;
     return p->idx;
 
 }
 
-int buddy_free(pair_t *p, int idx, int level)
+int buddy_free(pair_t *p, int idx)
 {
     int rt_left = -1;
     int rt_right = -1;
@@ -60,8 +60,8 @@ int buddy_free(pair_t *p, int idx, int level)
     if (p->state == SPLIT) {
 
         // recurse down each path
-        rt_left = buddy_free(p->left, idx, level+1);
-        rt_right = buddy_free(p->right, idx, level+1);
+        rt_left = buddy_free(p->left, idx);
+        rt_right = buddy_free(p->right, idx);
 
         // check if we should merge this split
         if (p->left->state == FREE && p->right->state == FREE) {
@@ -83,6 +83,24 @@ int buddy_free(pair_t *p, int idx, int level)
         p->state = FREE;
         return 0;
     }
+
+    return -1;
+}
+
+int buddy_get_size(pair_t *p, int idx)
+{
+    int rt = -1;
+
+    if (p->state == SPLIT) {
+        rt = buddy_get_size(p->left, idx);
+        if (rt < 0)
+            return buddy_get_size(p->right, idx);
+        else
+            return rt;
+    }
+
+    if (p->idx == idx && p->state == ALLOC)
+        return p->size;
 
     return -1;
 }
