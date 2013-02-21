@@ -10,7 +10,7 @@ default:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	rm buddy_test
+	rm -f buddy_test vmm_test
 
 install:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
