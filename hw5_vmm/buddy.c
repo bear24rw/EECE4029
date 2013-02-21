@@ -85,7 +85,6 @@ int _buddy_alloc(node_t *n, int size)
     /* if we've gotten here we are free but not big enough to split */
     n->state = ALLOC;
     return n->idx;
-
 }
 
 /*
