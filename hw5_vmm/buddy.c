@@ -54,48 +54,37 @@ int buddy_alloc(pair_t *p, int size, int level)
 
 int buddy_free(pair_t *p, int idx, int level)
 {
-    int rt = -1;
+    int rt_left = -1;
+    int rt_right = -1;
 
-    // we don't have any children to check
-    if (p->state != SPLIT) return -1;
+    if (p->state == SPLIT) {
 
-    printf("level %d\n", level);
+        // recurse down each path
+        rt_left = buddy_free(p->left, idx, level+1);
+        rt_right = buddy_free(p->right, idx, level+1);
 
-    //printf("checking left idx %d\n", p->left->idx);
-    if (p->left->idx == idx && p->left->state == ALLOC) {
-        p->left->state = FREE;
-        printf("freeing idx %d\n", idx);
-        rt = 0;
+        // check if we should merge this split
+        if (p->left->state == FREE && p->right->state == FREE) {
+            //printf("merging idx %d\n", idx);
+            free(p->left);
+            free(p->right);
+            p->left = NULL;
+            p->right = NULL;
+            p->state = FREE;
+        }
+
+        // if either path freed the slot return success
+        if (rt_left == 0 || rt_right == 0) return 0;
+
+        return -1;
     }
 
-    //printf("checking right idx %d\n", p->right->idx);
-    if (p->right->idx == idx && p->right->state == ALLOC) {
-        p->right->state = FREE;
-        printf("freeing idx %d\n", idx);
-        rt = 0;
-    }
-
-    if (p->left->state == FREE && p->right->state == FREE) {
-        printf("merging idx %d\n", idx);
-        free(p->left);
-        free(p->right);
-        p->left = NULL;
-        p->right = NULL;
+    if (p->idx == idx && p->state == ALLOC) {
         p->state = FREE;
         return 0;
     }
 
-    int rt2 = -1;
-    if (rt < 0) {
-        rt2 = buddy_free(p->left, idx, level+1);
-        if (rt2 < 0) {
-            return buddy_free(p->right, idx, level+1);
-        } else {
-            return rt2;
-        }
-    }
-
-    return rt;
+    return -1;
 }
 
 void print_tree(pair_t *p)

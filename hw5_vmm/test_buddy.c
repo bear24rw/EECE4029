@@ -9,7 +9,8 @@ void alloc_check(int bytes, int idx)
 {
     int rt = buddy_alloc(pool_head, bytes, 0);
     assert(rt == idx);
-    printf("ADD %d\t", bytes);
+    printf("ADDED %d BYTES\t", bytes);
+    printf("|");
     print_tree(pool_head);
     printf("\n");
 }
@@ -18,7 +19,8 @@ void free_check(int idx, int rt)
 {
     int ret = buddy_free(pool_head, idx, 0);
     assert(ret == rt);
-    printf("FREE %d\t", idx);
+    printf("FREED IDX %d\t", idx);
+    printf("|");
     print_tree(pool_head);
     printf("\n");
 }
@@ -44,11 +46,10 @@ int main(void)
     alloc_check(2, 2);
     alloc_check(2, 8);
 
-    alloc_check(4, 12);
-    alloc_check(2, 10);
-
     free_check(4, 0);
     free_check(8, 0);
+    free_check(0, 0);
+    free_check(2, 0);
 
     return 0;
 }
