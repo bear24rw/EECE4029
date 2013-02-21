@@ -1,6 +1,12 @@
 #ifndef _BUDDY_H_
 #define _BUDDY_H_
 
+#ifdef NONKERNEL
+#define bmalloc(...) malloc(__VA_ARGS__)
+#else
+#define bmalloc(...) vmalloc(__VA_ARGS__)
+#endif
+
 //#define POOL_SIZE   16777223
 #define POOL_SIZE   16
 

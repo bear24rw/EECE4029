@@ -15,4 +15,4 @@ install:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
 
 buddy_test: buddy_test.c buddy.c buddy.h
-	gcc $^ -Wall -g -o $@
+	gcc $^ -Wall -g -o $@ -DNONKERNEL

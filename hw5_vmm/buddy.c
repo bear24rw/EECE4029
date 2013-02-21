@@ -29,8 +29,8 @@ int buddy_alloc(pair_t *p, int size)
         p->state = SPLIT;
 
         // make a new pair
-        p->left = (pair_t*)malloc(sizeof(pair_t));
-        p->right = (pair_t*)malloc(sizeof(pair_t));
+        p->left = (pair_t*)bmalloc(sizeof(pair_t));
+        p->right = (pair_t*)bmalloc(sizeof(pair_t));
         p->left->state = FREE;
         p->right->state = FREE;
         p->left->size = p->size / 2;
