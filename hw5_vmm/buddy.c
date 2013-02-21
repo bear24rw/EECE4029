@@ -1,5 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "buddy.h"
 
 char *buddy_pool;
@@ -7,8 +5,8 @@ struct node_t *buddy_head;
 
 int buddy_init(int size)
 {
-    if (buddy_pool) free(buddy_pool);
-    if (buddy_head) free(buddy_head);
+    if (buddy_pool) bfree(buddy_pool);
+    if (buddy_head) bfree(buddy_head);
 
     buddy_pool = bmalloc(size);
     if (!buddy_pool) {
@@ -137,6 +135,8 @@ int _buddy_size(node_t *n, int idx)
 
 void _buddy_print(node_t *n)
 {
+    int i;
+
     // if there are children print them
     if (n->left != NULL) {
         _buddy_print(n->left);
@@ -145,14 +145,13 @@ void _buddy_print(node_t *n)
     }
 
     // otherwise print outself
-    int i;
     for (i = 0; i < n->size; i++) {
         if (n->state == FREE)
-            printf("-,");
+            printb("-,");
         else
-            printf("%d,", n->idx);
+            printb("%d,", n->idx);
     }
-    printf("|");
+    printb("|");
 }
 
 /* recursion wrappers */
