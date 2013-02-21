@@ -12,6 +12,7 @@
 #include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <asm/uaccess.h>
+#include "buddy.h"
 #include "vmm.h"
 
 int current_idx = 0;
@@ -23,19 +24,20 @@ long ioctl(struct file *file,
 {
     char ch;
     int size;
-    int page;
+    int idx;
     int bytes;
 
     switch (ioctl_num) {
         case IOCTL_ALLOC:
             size = (int)ioctl_param;
             printk(KERN_INFO "vmm: allocating %d bytes\n", size);
-            return 0xbeef;
+            return buddy_alloc(size);
             break;
 
         case IOCTL_FREE:
-            page = (int)ioctl_param;
-            printk(KERN_INFO "vmm: freeing idx %d\n", page);
+            current_idx = (int)ioctl_param;
+            printk(KERN_INFO "vmm: freeing idx %d\n", current_idx);
+            return buddy_free(current_idx);
             break;
 
         case IOCTL_SET_IDX:
@@ -50,23 +52,30 @@ long ioctl(struct file *file,
 
         case IOCTL_WRITE:
             bytes = 0;
+            size = buddy_size(current_idx);
             while (1) {
                 get_user(ch, (char*)ioctl_param+bytes);
-                if (ch == '\0') {
-                    printk(KERN_INFO "vmm: wrote 0 bytes\n");
-                    break;
+                if (ch == '\0') break;
+                if (bytes > size) {
+                    printk(KERN_INFO "vmm: writing out of allocated area\n");
+                    return -1;
                 }
                 printk(KERN_INFO "writing %c to %d\n", ch, current_idx+bytes);
-                *(pool+current_idx+bytes) = ch;
+                *(buddy_pool+current_idx+bytes) = ch;
                 bytes++;
             }
             printk(KERN_INFO "vmm: wrote %d bytes\n", bytes);
             return bytes;
 
         case IOCTL_READ:
+            if (read_size > buddy_size(current_idx)) {
+                printk(KERN_INFO "vmm: read bigger than allocated area\n");
+                return -1;
+            }
+
             bytes = 0;
             while (bytes < read_size) {
-                put_user(*(pool+current_idx+bytes), (char*)ioctl_param+bytes);
+                put_user(*(buddy_pool+current_idx+bytes), (char*)ioctl_param+bytes);
                 bytes++;
             }
             printk(KERN_INFO "vmm: read %d bytes\n", bytes);
@@ -97,11 +106,11 @@ static ssize_t write(struct file *file,
 
 
 struct file_operations file_ops = {
-    .read = read,
-    .write = write,
+    //.read = read,
+    //.write = write,
     .unlocked_ioctl = ioctl,
-    .open = open,
-    .release = release
+    //.open = open,
+    //.release = release
 };
 
 /*
@@ -116,20 +125,11 @@ static int __init init_mod(void)
         return ret;
     }
 
-    pool = vmalloc(POOL_SIZE);
-    if (!pool) {
-        printk(KERN_INFO "vmm: could not allocate pool\n");
+    ret = buddy_init(16);
+    if (ret < 0) {
+        printk(KERN_INFO "vmm: could not allocate buddy pool\n");
         return -ENOMEM;
     }
-
-    pool_free = POOL_SIZE;
-
-    pool_head = (pair_t*)kmalloc(sizeof(pair_t));
-    pool_head.left = NULL;
-    pool_head.right = NULL;
-    pool_head.free = 1;
-    pool_head.size = POOL_SIZE;
-    pool_head.idx = 0;
 
     printk(KERN_INFO "vmm: Module loaded successfully (device number: %d)\n", MAJOR_NUM);
     return 0;
@@ -140,7 +140,7 @@ static int __init init_mod(void)
  */
 static void __exit exit_mod(void)
 {
-    vfree(pool);
+    buddy_kill();
     unregister_chrdev(MAJOR_NUM, DEVICE_NAME);
     printk(KERN_INFO "vmm: Module unloaded successfully\n");
 }

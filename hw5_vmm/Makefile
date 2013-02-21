@@ -1,4 +1,5 @@
-obj-m := vmm.o
+obj-m += vmm_dev.o
+vmm_dev-objs += buddy.o vmm.o
 
 KVERSION := $(shell uname -r)
 KDIR := /lib/modules/$(KVERSION)/build

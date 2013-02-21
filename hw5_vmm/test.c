@@ -74,15 +74,19 @@ int main(void)
         exit(-1);
     }
 
-    char buf[5] = "max!\0";
-    char out[5];
-    out[4] = '\0';
+    char buf[4] = "max\0";
+    char out[4];
+    out[3] = '\0';
 
-    printf("Allocated idx %d\n", vmm_alloc(fd, 100));
-    printf("Writing to idx 5: %d\n", vmm_write(fd, 5, buf));
-    printf("Reading from idx 5: %d\n", vmm_read(fd, 5, out, 4));
+    printf("Allocated idx %d\n", vmm_alloc(fd, 2));
+    printf("Allocated idx %d\n", vmm_alloc(fd, 4));
+    printf("Allocated idx %d\n", vmm_alloc(fd, 2));
+    /*
+    printf("Writing to idx 5: %d\n", vmm_write(fd, 0, buf));
+    printf("Reading from idx 5: %d\n", vmm_read(fd, 0, out, 4));
     printf("Read: %s\n", out);
-    printf("Freeing\n"); vmm_free(fd, 5);
+    printf("Freeing\n"); vmm_free(fd, 0);
+    */
 
     return 0;
 }
