@@ -2,6 +2,35 @@
 #include <stdlib.h>
 #include "buddy.h"
 
+char *buddy_pool;
+struct node_t *buddy_head;
+
+int buddy_init(int size)
+{
+    if (buddy_pool) free(buddy_pool);
+    if (buddy_head) free(buddy_head);
+
+    buddy_pool = bmalloc(size);
+    if (!buddy_pool) {
+        printb("vmm: could not allocate pool\n");
+        return -1;
+    }
+
+    buddy_head = (node_t*)bmalloc(sizeof(node_t));
+    if (!buddy_head) {
+        printb("vmm: could not allocate buddy head\n");
+        return -1;
+    }
+
+    buddy_head->left = NULL;
+    buddy_head->right = NULL;
+    buddy_head->state = FREE;
+    buddy_head->size = size;
+    buddy_head->idx = 0;
+
+    return 0;
+}
+
 int buddy_alloc(node_t *n, int size)
 {
     int rt = -1;
