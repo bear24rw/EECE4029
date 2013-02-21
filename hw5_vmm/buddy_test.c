@@ -5,20 +5,20 @@
 
 void alloc_check(int bytes, int idx)
 {
-    int rt = buddy_alloc(buddy_head, bytes);
+    int rt = buddy_alloc(bytes);
     assert(rt == idx);
     printf("ADDED %d BYTES\t|", bytes);
-    print_tree(buddy_head);
+    buddy_print();
     if (rt < 0) printf("  <-- returned %d", rt);
     printf("\n");
 }
 
 void free_check(int idx, int expected_rt)
 {
-    int rt = buddy_free(buddy_head, idx);
+    int rt = buddy_free(idx);
     assert(rt == expected_rt);
     printf("FREED IDX %d\t|", idx);
-    print_tree(buddy_head);
+    buddy_print();
     if (rt < 0) printf("  <-- returned %d", rt);
     printf("\n");
 }
@@ -26,7 +26,7 @@ void free_check(int idx, int expected_rt)
 void size_check(int idx, int size)
 {
     printf("SIZE IDX %d == %d\n", idx, size);
-    int rt = buddy_get_size(buddy_head, idx);
+    int rt = buddy_size(idx);
     assert(rt == size);
 }
 

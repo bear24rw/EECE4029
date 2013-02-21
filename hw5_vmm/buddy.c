@@ -31,17 +31,17 @@ int buddy_init(int size)
     return 0;
 }
 
-int buddy_alloc(node_t *n, int size)
+int _buddy_alloc(node_t *n, int size)
 {
     int rt = -1;
 
     // if there is a pair below us, try them
     if (n->state == SPLIT) {
 
-        rt = buddy_alloc(n->left, size);
+        rt = _buddy_alloc(n->left, size);
         if (rt >= 0) return rt;
 
-        return buddy_alloc(n->right, size);
+        return _buddy_alloc(n->right, size);
     }
 
     // if were not free return error
@@ -67,7 +67,7 @@ int buddy_alloc(node_t *n, int size)
         n->left->left = NULL;
         n->right->right = NULL;
 
-        return buddy_alloc(n->left, size);
+        return _buddy_alloc(n->left, size);
 
     }
 
@@ -79,7 +79,7 @@ int buddy_alloc(node_t *n, int size)
 
 }
 
-int buddy_free(node_t *n, int idx)
+int _buddy_free(node_t *n, int idx)
 {
     int rt_left = -1;
     int rt_right = -1;
@@ -87,8 +87,8 @@ int buddy_free(node_t *n, int idx)
     if (n->state == SPLIT) {
 
         // recurse down each path
-        rt_left = buddy_free(n->left, idx);
-        rt_right = buddy_free(n->right, idx);
+        rt_left = _buddy_free(n->left, idx);
+        rt_right = _buddy_free(n->right, idx);
 
         // check if we should merge this split
         if (n->left->state == FREE && n->right->state == FREE) {
@@ -114,14 +114,14 @@ int buddy_free(node_t *n, int idx)
     return -1;
 }
 
-int buddy_get_size(node_t *n, int idx)
+int _buddy_size(node_t *n, int idx)
 {
     int rt = -1;
 
     if (n->state == SPLIT) {
-        rt = buddy_get_size(n->left, idx);
+        rt = _buddy_size(n->left, idx);
         if (rt < 0)
-            return buddy_get_size(n->right, idx);
+            return _buddy_size(n->right, idx);
         else
             return rt;
     }
@@ -132,12 +132,12 @@ int buddy_get_size(node_t *n, int idx)
     return -1;
 }
 
-void print_tree(node_t *n)
+void _buddy_print(node_t *n)
 {
     // if there are children print them
     if (n->left != NULL) {
-        print_tree(n->left);
-        print_tree(n->right);
+        _buddy_print(n->left);
+        _buddy_print(n->right);
         return;
     }
 
@@ -152,3 +152,8 @@ void print_tree(node_t *n)
     printf("|");
 }
 
+/* recursion wrappers */
+int buddy_alloc(int size) { return _buddy_alloc(buddy_head, size); }
+int buddy_free(int idx) { return _buddy_free(buddy_head, idx); }
+int buddy_size(int idx) { return _buddy_size(buddy_head, idx); }
+void buddy_print(void) { _buddy_print(buddy_head); }

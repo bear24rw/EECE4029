@@ -22,12 +22,11 @@ struct node_t {
 };
 
 extern char *buddy_pool;
-extern struct node_t *buddy_head;
 
 int buddy_init(int size);
-int buddy_alloc(node_t *n, int size);
-int buddy_free(node_t *n, int idx);
-int buddy_get_size(node_t *n, int idx);
-void print_tree(node_t *n);
+int buddy_alloc(int size);
+int buddy_free(int idx);
+int buddy_size(int idx);
+void buddy_print(void);
 
 #endif
