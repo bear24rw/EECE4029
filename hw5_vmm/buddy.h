@@ -12,13 +12,11 @@
 
 typedef struct pair_t pair_t;
 
-#define FREE 0
-#define SPLIT 1
-#define ALLOC 2
+enum node_state {FREE, SPLIT, ALLOC};
 
 struct pair_t {
     int idx;
-    int state;
+    enum node_state state;
     int size;
     pair_t* left;
     pair_t* right;
