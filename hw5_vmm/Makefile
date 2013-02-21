@@ -9,6 +9,10 @@ default:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	rm buddy_test
 
 install:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
+
+buddy_test: buddy_test.c buddy.c buddy.h
+	gcc $^ -Wall -g -o $@
