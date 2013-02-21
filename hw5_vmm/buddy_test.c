@@ -36,6 +36,7 @@ void size_check(int idx, int size)
 void new_pool(int size)
 {
     if (pool) free(pool);
+    if (pool_head) free(pool_head);
 
     pool = malloc(size);
     if (!pool) {
