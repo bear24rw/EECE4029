@@ -12,7 +12,7 @@ int buddy_alloc(pair_t *p, int size, int level)
     if (p->state == SPLIT) {
 
         rt = buddy_alloc(p->left, size, level+1);
-        if (rt > 0) return rt;
+        if (rt >= 0) return rt;
 
         return buddy_alloc(p->right, size, level+1);
     }
