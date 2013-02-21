@@ -12,13 +12,11 @@ int buddy_init(int size)
 
     buddy_pool = bmalloc(size);
     if (!buddy_pool) {
-        printb("vmm: could not allocate pool\n");
         return -1;
     }
 
     buddy_head = (node_t*)bmalloc(sizeof(node_t));
     if (!buddy_head) {
-        printb("vmm: could not allocate buddy head\n");
         return -1;
     }
 
