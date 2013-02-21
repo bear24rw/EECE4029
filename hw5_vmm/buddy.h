@@ -2,10 +2,13 @@
 #define _BUDDY_H_
 
 #ifdef NONKERNEL
+#include <stdio.h>
+#include <stdlib.h>
 #define bmalloc(...) malloc(__VA_ARGS__)
 #define bfree(...) free(__VA_ARGS__)
 #define printb(...) printf(__VA_ARGS__)
 #else
+#include <linux/vmalloc.h>
 #define bmalloc(...) vmalloc(__VA_ARGS__)
 #define bfree(...) vfree(__VA_ARGS__)
 #define printb(...) printk(KERN_INFO __VA_ARGS__)
