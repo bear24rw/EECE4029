@@ -2,7 +2,7 @@
 #define _BUDDY_H_
 
 //#define POOL_SIZE   16777223
-#define POOL_SIZE   16
+#define POOL_SIZE   16*3
 
 typedef struct pair_t pair_t;
 
