@@ -85,32 +85,8 @@ long ioctl(struct file *file,
     return 0;
 }
 
-static int open(struct inode *inode, struct file *file) {printk(KERN_INFO "vmm: open\n"); return 0;}
-static int release(struct inode *inode, struct file *file) {printk(KERN_INFO "vmm: release\n"); return 0;}
-static ssize_t read(struct file *file,
-        char __user * buffer,/* buffer to be filled with data */
-        size_t length,/* length of the buffer     */
-        loff_t * offset)
-{
-    printk(KERN_INFO "vmm: read\n");
-    return 0;
-}
-static ssize_t write(struct file *file,
-        const char __user *buffer,
-        size_t length,
-        loff_t *offset)
-{
-    printk(KERN_INFO "vmm: write\n");
-    return 0;
-}
-
-
 struct file_operations file_ops = {
-    //.read = read,
-    //.write = write,
     .unlocked_ioctl = ioctl,
-    //.open = open,
-    //.release = release
 };
 
 /*
