@@ -7,7 +7,8 @@ char *pool;
 
 void alloc_check(int bytes, int idx)
 {
-    assert(buddy_alloc(pool_head, bytes, 0) == idx);
+    int rt = buddy_alloc(pool_head, bytes, 0);
+    assert(rt == idx);
     printf("ADD %d\t", bytes);
     print_tree(pool_head);
     printf("\n");
@@ -15,7 +16,8 @@ void alloc_check(int bytes, int idx)
 
 void free_check(int idx, int rt)
 {
-    assert(buddy_free(pool_head, idx, 0) == rt);
+    int ret = buddy_free(pool_head, idx, 0);
+    assert(ret == rt);
     printf("FREE %d\t", idx);
     print_tree(pool_head);
     printf("\n");
