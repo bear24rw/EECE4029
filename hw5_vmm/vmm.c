@@ -14,9 +14,6 @@
 #include <asm/uaccess.h>
 #include "vmm.h"
 
-#define POOL_SIZE   16777223
-char *pool;
-
 int current_idx = 0;
 int read_size = 0;
 
@@ -124,6 +121,15 @@ static int __init init_mod(void)
         printk(KERN_INFO "vmm: could not allocate pool\n");
         return -ENOMEM;
     }
+
+    pool_free = POOL_SIZE;
+
+    pool_head = (pair_t*)kmalloc(sizeof(pair_t));
+    pool_head.left = NULL;
+    pool_head.right = NULL;
+    pool_head.free = 1;
+    pool_head.size = POOL_SIZE;
+    pool_head.idx = 0;
 
     printk(KERN_INFO "vmm: Module loaded successfully (device number: %d)\n", MAJOR_NUM);
     return 0;

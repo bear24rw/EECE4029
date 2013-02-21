@@ -6,9 +6,13 @@
 
 typedef struct pair_t pair_t;
 
+#define FREE 0
+#define SPLIT 1
+#define ALLOC 2
+
 struct pair_t {
     int idx;
-    char free;
+    int state;
     int size;
     pair_t* left;
     pair_t* right;
@@ -16,7 +20,8 @@ struct pair_t {
 
 struct pair_t *pool_head;
 
-int buddy_alloc(pair_t *p, int size, int level, int idx);
+int buddy_alloc(pair_t *p, int size, int level);
+int buddy_free(pair_t *p, int idx, int level);
 void print_tree(pair_t *p);
 
 #endif
