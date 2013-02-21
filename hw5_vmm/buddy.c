@@ -2,73 +2,73 @@
 #include <stdlib.h>
 #include "buddy.h"
 
-int buddy_alloc(pair_t *p, int size)
+int buddy_alloc(node_t *n, int size)
 {
     int rt = -1;
 
     // if there is a pair below us, try them
-    if (p->state == SPLIT) {
+    if (n->state == SPLIT) {
 
-        rt = buddy_alloc(p->left, size);
+        rt = buddy_alloc(n->left, size);
         if (rt >= 0) return rt;
 
-        return buddy_alloc(p->right, size);
+        return buddy_alloc(n->right, size);
     }
 
     // if were not free return error
-    if (p->state != FREE) return -1;
+    if (n->state != FREE) return -1;
 
     // if were too small return error
-    if (p->size < size) return -1;
+    if (n->size < size) return -1;
 
     // we have enough space to make another pair
-    if (p->size / 2 >= size) {
-        //printf("splitting (size %d idx %d)\n", p->size, p->idx);
-        p->state = SPLIT;
+    if (n->size / 2 >= size) {
+        //printf("splitting (size %d idx %d)\n", n->size, n->idx);
+        n->state = SPLIT;
 
         // make a new pair
-        p->left = (pair_t*)bmalloc(sizeof(pair_t));
-        p->right = (pair_t*)bmalloc(sizeof(pair_t));
-        p->left->state = FREE;
-        p->right->state = FREE;
-        p->left->size = p->size / 2;
-        p->right->size = p->size / 2;
-        p->left->idx = p->idx;
-        p->right->idx = p->idx + (p->size / 2);
-        p->left->left = NULL;
-        p->right->right = NULL;
+        n->left = (node_t*)bmalloc(sizeof(node_t));
+        n->right = (node_t*)bmalloc(sizeof(node_t));
+        n->left->state = FREE;
+        n->right->state = FREE;
+        n->left->size = n->size / 2;
+        n->right->size = n->size / 2;
+        n->left->idx = n->idx;
+        n->right->idx = n->idx + (n->size / 2);
+        n->left->left = NULL;
+        n->right->right = NULL;
 
-        return buddy_alloc(p->left, size);
+        return buddy_alloc(n->left, size);
 
     }
 
     // just allocate it here
     // we're no longer free
-    //printf("allocating idx %d \n", p->idx);
-    p->state = ALLOC;
-    return p->idx;
+    //printf("allocating idx %d \n", n->idx);
+    n->state = ALLOC;
+    return n->idx;
 
 }
 
-int buddy_free(pair_t *p, int idx)
+int buddy_free(node_t *n, int idx)
 {
     int rt_left = -1;
     int rt_right = -1;
 
-    if (p->state == SPLIT) {
+    if (n->state == SPLIT) {
 
         // recurse down each path
-        rt_left = buddy_free(p->left, idx);
-        rt_right = buddy_free(p->right, idx);
+        rt_left = buddy_free(n->left, idx);
+        rt_right = buddy_free(n->right, idx);
 
         // check if we should merge this split
-        if (p->left->state == FREE && p->right->state == FREE) {
+        if (n->left->state == FREE && n->right->state == FREE) {
             //printf("merging idx %d\n", idx);
-            free(p->left);
-            free(p->right);
-            p->left = NULL;
-            p->right = NULL;
-            p->state = FREE;
+            free(n->left);
+            free(n->right);
+            n->left = NULL;
+            n->right = NULL;
+            n->state = FREE;
         }
 
         // if either path freed the slot return success
@@ -77,48 +77,48 @@ int buddy_free(pair_t *p, int idx)
         return -1;
     }
 
-    if (p->idx == idx && p->state == ALLOC) {
-        p->state = FREE;
+    if (n->idx == idx && n->state == ALLOC) {
+        n->state = FREE;
         return 0;
     }
 
     return -1;
 }
 
-int buddy_get_size(pair_t *p, int idx)
+int buddy_get_size(node_t *n, int idx)
 {
     int rt = -1;
 
-    if (p->state == SPLIT) {
-        rt = buddy_get_size(p->left, idx);
+    if (n->state == SPLIT) {
+        rt = buddy_get_size(n->left, idx);
         if (rt < 0)
-            return buddy_get_size(p->right, idx);
+            return buddy_get_size(n->right, idx);
         else
             return rt;
     }
 
-    if (p->idx == idx && p->state == ALLOC)
-        return p->size;
+    if (n->idx == idx && n->state == ALLOC)
+        return n->size;
 
     return -1;
 }
 
-void print_tree(pair_t *p)
+void print_tree(node_t *n)
 {
     // if there are children print them
-    if (p->left != NULL) {
-        print_tree(p->left);
-        print_tree(p->right);
+    if (n->left != NULL) {
+        print_tree(n->left);
+        print_tree(n->right);
         return;
     }
 
     // otherwise print outself
     int i;
-    for (i = 0; i < p->size; i++) {
-        if (p->state == FREE)
+    for (i = 0; i < n->size; i++) {
+        if (n->state == FREE)
             printf("-,");
         else
-            printf("%d,", p->idx);
+            printf("%d,", n->idx);
     }
     printf("|");
 }

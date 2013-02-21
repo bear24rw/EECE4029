@@ -10,23 +10,23 @@
 //#define POOL_SIZE   16777223
 #define POOL_SIZE   16
 
-typedef struct pair_t pair_t;
+typedef struct node_t node_t;
 
 enum node_state {FREE, SPLIT, ALLOC};
 
-struct pair_t {
+struct node_t {
     int idx;
     enum node_state state;
     int size;
-    pair_t* left;
-    pair_t* right;
+    node_t* left;
+    node_t* right;
 };
 
-struct pair_t *pool_head;
+struct node_t *pool_head;
 
-int buddy_alloc(pair_t *p, int size);
-int buddy_free(pair_t *p, int idx);
-int buddy_get_size(pair_t *p, int idx);
-void print_tree(pair_t *p);
+int buddy_alloc(node_t *n, int size);
+int buddy_free(node_t *n, int idx);
+int buddy_get_size(node_t *n, int idx);
+void print_tree(node_t *n);
 
 #endif

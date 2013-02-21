@@ -44,7 +44,7 @@ void new_pool(int size)
         exit(-1);
     }
 
-    pool_head = (pair_t*)malloc(sizeof(pair_t));
+    pool_head = (node_t*)malloc(sizeof(node_t));
     pool_head->left = NULL;
     pool_head->right = NULL;
     pool_head->state = FREE;
