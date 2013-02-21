@@ -29,6 +29,11 @@ int buddy_init(int size)
     return 0;
 }
 
+void buddy_kill(void)
+{
+    /* TODO walk tree and free all nodes */
+}
+
 int _buddy_alloc(node_t *n, int size)
 {
     int rt = -1;
@@ -91,8 +96,8 @@ int _buddy_free(node_t *n, int idx)
         // check if we should merge this split
         if (n->left->state == FREE && n->right->state == FREE) {
             //printf("merging idx %d\n", idx);
-            free(n->left);
-            free(n->right);
+            bfree(n->left);
+            bfree(n->right);
             n->left = NULL;
             n->right = NULL;
             n->state = FREE;

@@ -3,9 +3,11 @@
 
 #ifdef NONKERNEL
 #define bmalloc(...) malloc(__VA_ARGS__)
+#define bfree(...) free(__VA_ARGS__)
 #define printb(...) printf(__VA_ARGS__)
 #else
 #define bmalloc(...) vmalloc(__VA_ARGS__)
+#define bfree(...) vfree(__VA_ARGS__)
 #define printb(...) printk(KERN_INFO __VA_ARGS__)
 #endif
 
@@ -28,5 +30,6 @@ int buddy_alloc(int size);
 int buddy_free(int idx);
 int buddy_size(int idx);
 void buddy_print(void);
+void buddy_kill(void);
 
 #endif
