@@ -17,3 +17,6 @@ install:
 
 buddy_test: buddy_test.c buddy.c buddy.h
 	gcc $^ -Wall -g -o $@ -DNONKERNEL
+
+vmm_test: vmm_test.c
+	gcc $^ -Wall -g -o $@
