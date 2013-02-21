@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include "buddy.h"
 
-int pool_free = POOL_SIZE;
-
 int buddy_alloc(pair_t *p, int size)
 {
     int rt = -1;
