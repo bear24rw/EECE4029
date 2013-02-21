@@ -11,10 +11,6 @@ struct node_t *buddy_head;
  */
 int buddy_init(int size)
 {
-    /* free the old pool if it existed */
-    if (buddy_pool) bfree(buddy_pool);
-    if (buddy_head) bfree(buddy_head);
-
     /* allocate space for all the pages */
     buddy_pool = bmalloc(size);
     if (!buddy_pool) {
@@ -34,11 +30,6 @@ int buddy_init(int size)
     buddy_head->idx = 0;
 
     return 0;
-}
-
-void buddy_kill(void)
-{
-    /* TODO walk tree and free all nodes */
 }
 
 /*
@@ -177,6 +168,21 @@ int _buddy_size(node_t *n, int idx)
 }
 
 /*
+ * Walks down the whole tree and frees every node.
+ */
+void _buddy_kill(node_t *n)
+{
+    /* if this node is split we want to recurse down each path */
+    if (n->state == SPLIT) {
+        _buddy_kill(n->left);
+        _buddy_kill(n->right);
+    }
+
+    /* free ourself */
+    bfree(n);
+}
+
+/*
  * Walk the tree and draw all allocated
  * and free space. If the space is allocated
  * it's index value is displayed. If space is
@@ -208,3 +214,4 @@ int buddy_alloc(int size) { return _buddy_alloc(buddy_head, size); }
 int buddy_free(int idx) { return _buddy_free(buddy_head, idx); }
 int buddy_size(int idx) { return _buddy_size(buddy_head, idx); }
 void buddy_print(void) { _buddy_print(buddy_head); }
+void buddy_kill(void) { _buddy_kill(buddy_head); }

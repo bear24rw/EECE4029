@@ -48,6 +48,7 @@ int main(void)
     free_check(8, 0);
     free_check(0, 0);
     free_check(2, 0);
+    buddy_kill();
 
     banner("Fill");
     buddy_init(16);
@@ -61,6 +62,7 @@ int main(void)
     free_check(8, 0);
     free_check(0, 0);
     free_check(2, 0);
+    buddy_kill();
 
     banner("no space");
     buddy_init(16);
@@ -71,11 +73,13 @@ int main(void)
     alloc_check(4, 12);
     alloc_check(2, 10);
     alloc_check(2, -1);
+    buddy_kill();
 
     banner("no split");
     buddy_init(16);
     alloc_check(16, 0);
     free_check(0, 0);
+    buddy_kill();
 
     banner("remove non existent");
     buddy_init(16);
@@ -83,6 +87,7 @@ int main(void)
     alloc_check(4, 4);
     free_check(2, -1);
     free_check(8, -1);
+    buddy_kill();
 
     banner("two even");
     buddy_init(16);
@@ -90,15 +95,18 @@ int main(void)
     alloc_check(8, 8);
     free_check(8, 0);
     free_check(0, 0);
+    buddy_kill();
 
     banner("first too big");
     buddy_init(16);
     alloc_check(20, -1);
+    buddy_kill();
 
     banner("free empty");
     buddy_init(16);
     free_check(0, -1);
     free_check(8, -1);
+    buddy_kill();
 
     banner("free out of range");
     buddy_init(16);
@@ -106,6 +114,7 @@ int main(void)
     alloc_check(4, 4);
     alloc_check(2, 2);
     free_check(20, -1);
+    buddy_kill();
 
     banner("pool size 1");
     buddy_init(1);
@@ -113,6 +122,7 @@ int main(void)
     alloc_check(4, -1);
     alloc_check(1, 0);
     free_check(0, 0);
+    buddy_kill();
 
     banner("pool size 0");
     buddy_init(0);
@@ -120,6 +130,7 @@ int main(void)
     alloc_check(4, -1);
     alloc_check(1, -1);
     free_check(0, -1);
+    buddy_kill();
 
     banner("test 1");
     buddy_init(16);
@@ -138,6 +149,7 @@ int main(void)
     free_check(4, 0);
     free_check(12, 0);
     free_check(8, 0);
+    buddy_kill();
 
     banner("test 2");
     buddy_init(8);
@@ -152,6 +164,7 @@ int main(void)
     free_check(4, 0);
     free_check(6, 0);
     free_check(0, 0);
+    buddy_kill();
 
     banner("size check PDF");
     buddy_init(16);
@@ -167,6 +180,7 @@ int main(void)
     free_check(8, 0);
     free_check(0, 0);
     free_check(2, 0);
+    buddy_kill();
 
     banner("size check test 1");
     buddy_init(16);
@@ -186,6 +200,7 @@ int main(void)
     size_check(4, 2);
     free_check(4, 0);
     size_check(4, -1);
+    buddy_kill();
 
     banner("size check pool size 1");
     buddy_init(1);
@@ -193,6 +208,7 @@ int main(void)
     size_check(0, 1);
     free_check(0, 0);
     size_check(0, -1);
+    buddy_kill();
 
     banner("size check two even");
     buddy_init(16);
@@ -204,7 +220,7 @@ int main(void)
     free_check(0, 0);
     size_check(0, -1);
     size_check(8, -1);
-
+    buddy_kill();
 
     return 0;
 }
