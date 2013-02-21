@@ -3,16 +3,25 @@
 char *buddy_pool;
 struct node_t *buddy_head;
 
+/*
+ * Attempt to allocate of pool of size 'size'
+ * and intialize the head node. Returns -1
+ * if either pool or head node could not be
+ * allocated.
+ */
 int buddy_init(int size)
 {
+    /* free the old pool if it existed */
     if (buddy_pool) bfree(buddy_pool);
     if (buddy_head) bfree(buddy_head);
 
+    /* allocate space for all the pages */
     buddy_pool = bmalloc(size);
     if (!buddy_pool) {
         return -1;
     }
 
+    /* allocate the head node of the tree */
     buddy_head = (node_t*)bmalloc(sizeof(node_t));
     if (!buddy_head) {
         return -1;
@@ -32,11 +41,19 @@ void buddy_kill(void)
     /* TODO walk tree and free all nodes */
 }
 
+/*
+ * Attempt to allocate a page of size 'size'
+ * returns page index on success or -1 if the
+ * requested size could not fit.
+ */
 int _buddy_alloc(node_t *n, int size)
 {
     int rt = -1;
 
-    // if there is a pair below us, try them
+    /* if this node is a split then recurse down the
+     * left side. If the left side is not successful
+     * then try the right side.
+     */
     if (n->state == SPLIT) {
 
         rt = _buddy_alloc(n->left, size);
@@ -45,18 +62,19 @@ int _buddy_alloc(node_t *n, int size)
         return _buddy_alloc(n->right, size);
     }
 
-    // if were not free return error
+    /* if were not free return error */
     if (n->state != FREE) return -1;
 
-    // if were too small return error
+    /* if were too small return error */
     if (n->size < size) return -1;
 
-    // we have enough space to make another pair
+    /* check if we have enough space to make a split */
     if (n->size / 2 >= size) {
-        //printf("splitting (size %d idx %d)\n", n->size, n->idx);
+
+        /* we do, mark this node as SPLIT */
         n->state = SPLIT;
 
-        // make a new pair
+        /* make two new nodes below us with half our size */
         n->left = (node_t*)bmalloc(sizeof(node_t));
         n->right = (node_t*)bmalloc(sizeof(node_t));
         n->left->state = FREE;
@@ -68,32 +86,38 @@ int _buddy_alloc(node_t *n, int size)
         n->left->left = NULL;
         n->right->right = NULL;
 
+        /* keep traversing down the tree */
         return _buddy_alloc(n->left, size);
 
     }
 
-    // just allocate it here
-    // we're no longer free
-    //printf("allocating idx %d \n", n->idx);
+    /* if we've gotten here we are free but not big enough to split */
     n->state = ALLOC;
     return n->idx;
 
 }
 
+/*
+ * Attempt to mark page 'idx' as FREE
+ * Also merge two pages together if they
+ * are buddies and both free. Returns 0
+ * if 'idx' was marked FREE or -1 if 'idx'
+ * was not found.
+ */
 int _buddy_free(node_t *n, int idx)
 {
     int rt_left = -1;
     int rt_right = -1;
 
+    /* if this node is split we want to recurse down each path */
     if (n->state == SPLIT) {
 
-        // recurse down each path
+        /* recurse down each path */
         rt_left = _buddy_free(n->left, idx);
         rt_right = _buddy_free(n->right, idx);
 
-        // check if we should merge this split
+        /* check if we should merge this split */
         if (n->left->state == FREE && n->right->state == FREE) {
-            //printf("merging idx %d\n", idx);
             bfree(n->left);
             bfree(n->right);
             n->left = NULL;
@@ -101,24 +125,39 @@ int _buddy_free(node_t *n, int idx)
             n->state = FREE;
         }
 
-        // if either path freed the slot return success
+        /* if either path freed the page return success */
         if (rt_left == 0 || rt_right == 0) return 0;
 
+        /* neither path freed the page */
         return -1;
     }
 
+
+    /* if this nodes index matches the one were searching
+     * for and it is allocated mark it as FREE.
+     */
     if (n->idx == idx && n->state == ALLOC) {
         n->state = FREE;
         return 0;
     }
 
+    /* this is not the node we are looking for */
     return -1;
 }
 
+/*
+ * Attempt to return the size of page 'idx'.
+ * Returns the size if successful or -1 if
+ * 'idx' could not be found.
+ */
 int _buddy_size(node_t *n, int idx)
 {
     int rt = -1;
 
+    /* if this node is a split then recurse down the
+     * left side. If the left side is not successful
+     * then try the right side.
+     */
     if (n->state == SPLIT) {
         rt = _buddy_size(n->left, idx);
         if (rt < 0)
@@ -127,24 +166,34 @@ int _buddy_size(node_t *n, int idx)
             return rt;
     }
 
+    /* if this nodes index matches the one were searching
+     * for and it is allocated return the size of it.
+     */
     if (n->idx == idx && n->state == ALLOC)
         return n->size;
 
+    /* this is not the node we are looking for */
     return -1;
 }
 
+/*
+ * Walk the tree and draw all allocated
+ * and free space. If the space is allocated
+ * it's index value is displayed. If space is
+ * free a dash (-) is displayed.
+ */
 void _buddy_print(node_t *n)
 {
     int i;
 
-    // if there are children print them
-    if (n->left != NULL) {
+    /* if this node is split we want to recurse down each path */
+    if (n->state == SPLIT) {
         _buddy_print(n->left);
         _buddy_print(n->right);
         return;
     }
 
-    // otherwise print outself
+    /* this node is either ALLOC or FREE so draw it */
     for (i = 0; i < n->size; i++) {
         if (n->state == FREE)
             printb("-,");
