@@ -83,10 +83,11 @@ IOCTL_WRITE
 IOCTL_READ
 ```
 
-Ioctl Test
-----------
-In order to test the kernel module a `vmm\_test` program was developed that wraps the
-ioctl commands into simple functions:
+Kernel Module Test
+------------------
+In order to test the kernel module and exercise the ioctl's a user space
+program `vmm\_test` was developed that wraps the ioctl commands into simple
+functions:
 
 ```C
 int get_mem(int fd, int bytes)
