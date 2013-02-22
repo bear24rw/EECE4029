@@ -136,31 +136,38 @@ int _buddy_free(node_t *n, int idx)
 }
 
 /*
- * Attempt to return the size of page 'idx'.
- * Returns the size if successful or -1 if
- * 'idx' could not be found.
+ * Attempts to return the number of bytes until
+ * the end of the page containing 'idx'. Ex. if
+ * page starts at idx 0 and is 10 bytes long passing
+ * 7 to this function will return 3.
  */
 int _buddy_size(node_t *n, int idx)
 {
     int rt = -1;
 
     /* if this node is a split then recurse down the
-     * left side. If the left side is not successful
-     * then try the right side.
+     * right side first. If the right side is not successful
+     * then try the left side. Right side first because will
+     * have higher idx values first.
      */
     if (n->state == SPLIT) {
-        rt = _buddy_size(n->left, idx);
+        rt = _buddy_size(n->right, idx);
         if (rt < 0)
-            return _buddy_size(n->right, idx);
+            return _buddy_size(n->left, idx);
         else
             return rt;
     }
 
-    /* if this nodes index matches the one were searching
-     * for and it is allocated return the size of it.
+    /* if the index we're searching for is to the right
+     * of this node and to the left of the end of it and
+     * this node is allocated return the distance to the end.
      */
-    if (n->idx == idx && n->state == ALLOC)
-        return n->size;
+    if ((idx >= n->idx) &&
+        (idx < n->idx + n->size) &&
+        (n->state == ALLOC))
+    {
+        return (n->idx + n->size) - idx;
+    }
 
     /* this is not the node we are looking for */
     return -1;
