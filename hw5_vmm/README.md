@@ -52,9 +52,9 @@ The `buddy\_print` function draws out the pool for debugging purposes.
 
 Kernel Module
 -------------
-The kernel module allocates a fixed pool of space in the kernel and then
-allocates pages of this space through ioctrl's based on the buddy allocator
-described above.
+The kernel module uses the buddy allocator to initialize a fixed pool of kernel
+memory and then allocates and frees pages of this space using the buddy
+allocator through ioctrl's.
 
 The default pool size is set to (2^12)*(2^12) bytes, or 16,777,216 bytes. The
 pool size can be adjusted at load time using the `pool\_size` parameter. For
@@ -154,10 +154,10 @@ Feb 21 21:37:52 gentoo-vm kernel: vmm: freeing idx 0
 
 Buddy Allocator Unit Tests
 --------------------------
-In order to test the buddy allocator and exercise edge conditions a user space
-`buddy\_test` program was developed that allows easy testing of multiple
-scenarios.  For instance to allocate a pool of 16 bytes and then allocate two
-pages one being 2 bytes and the other being 4 bytes we can write:
+In order to test the buddy allocator and exercise various use cases a user
+space program called `buddy\_test` was developed that allows easy testing of
+multiple scenarios.  For instance to allocate a pool of 16 bytes and then
+allocate two pages one being 2 bytes and the other being 4 bytes we can write:
 
 ```C
 banner("Example");
@@ -167,10 +167,10 @@ alloc_check(4, 4);
 buddy_kill();
 ```
 
-The first argument of `alloc\_check()` tells how many bytes we want to
+The first argument of `alloc\_check` tells how many bytes we want to
 allocate. The second argument is the expected index of the page. If the buddy
 allocator returns a different index then the one we were expecting the
-`assert()` statement in `alloc\_check()` will fail to indicate the error.
+`assert` statement in `alloc\_check` will fail to indicate the error.
 
 After adding our test to `buddy\_test.c` we can compile it with:
 
@@ -178,7 +178,7 @@ After adding our test to `buddy\_test.c` we can compile it with:
 make buddy_test
 ```
 
-And running it:
+And run it:
 
 ```
 % ./buddy_test
@@ -230,8 +230,8 @@ ALLOCED 1 BYTES |0,0,0,0,|4,|-,|-,-,|8,8,8,8,8,8,8,8,|
 ALLOCED 1 BYTES |0,0,0,0,|4,|5,|-,-,|8,8,8,8,8,8,8,8,|
 ```
 
-The `buddy\_test` program exercises 19 situations that were determined to be
-valuable tests during development. Since the buddy allocator is dealing with
-allocating and freeing memory as it builds the tree it is highly beneficial to
-be able to test it like this in user space so we don't have to deal with kernel
-panics.
+The `buddy\_test` program exercises 19 different situations that were
+determined to be valuable tests during development. Since the buddy allocator
+is dealing with allocating and freeing memory as it builds the tree it is
+highly beneficial to be able to test it like this in user space so we don't
+have to deal with possible kernel panics.
