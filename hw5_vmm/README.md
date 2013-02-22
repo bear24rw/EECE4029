@@ -18,27 +18,29 @@ int buddy_size(int idx);
 void buddy_print(void);
 void buddy_kill(void);
 ```
-In order to compile for userspace you must define `NONKERNEL` when compiling so that
-the proper header files and memory allocation functions will be used.
+In order to compile for userspace you must define `NONKERNEL` when compiling so
+that the proper header files and memory allocation functions will be used
+(printk vs printf, kmalloc vs malloc, etc..).
 
-The buddy allocator uses a binary tree where each node is in one of three states:
-`FREE`, `SPLIT`, or `ALLOC`.  Additionally, each node keeps track of its index
-into the memory pool `buddy\_pool` as well as its size.  When allocating space
-the tree is traversed and free space is broken in half until the smallest space
-that will properly allocate the request is achieved. If space cannot be found
-the function returns -1 to indicate an error. When freeing space the tree is
-first traversed in all directions to the bottom leaf nodes. It then checks if
-the leaf node is the one it is trying to free and if so marks it as `FREE` and
-returns 0 to indicate it was successful. When it is recursing back up the tree
-the children of nodes marked as `SPLIT` are checked to see if both are `FREE`.
-If both children are `FREE` they are deallocated and the parent node is marked
-as `FREE` to coalesce the space.
+The buddy allocator uses a binary tree where each node is in one of three
+states: `FREE`, `SPLIT`, or `ALLOC`.  Additionally, each node keeps track of
+its index into the memory pool `buddy\_pool` as well as its size.  When
+attempting to allocate space the tree is traversed and free space is broken in
+half until the smallest space that will properly allocate the request is
+achieved. If space cannot be found the function returns -1 to indicate an
+error. When freeing space the tree is first traversed in all directions to the
+bottom leaf nodes. It then checks if the leaf node is associated with the page
+it is trying to free and if so marks it as `FREE` and returns 0 to indicate it
+was successful.  When it is recursing back up the tree the children of nodes
+marked as `SPLIT` are checked to see if both are `FREE`.  If both children are
+`FREE` they are deallocated and the parent node is marked as `FREE` to coalesce
+the space.
 
 Kernel Module
 -------------
-The virtual memory kernel module allocates a fixed pool of space in the kernel.
-It then allocates pages of this space based on the buddy allocator described
-above.
+The kernel module allocates a fixed pool of space in the kernel and then
+allocates pages of this space through ioctrl's based on the buddy allocator
+described above.
 
 The default pool size is set to (2^12)*(2^12) bytes, or 16,777,216 bytes. The
 pool size can be adjusted at load time using the `pool\_size` parameter. For
@@ -67,6 +69,75 @@ IOCTL_WRITE
 IOCTL_READ
 ```
 
+Ioctl Test
+----------
+In order to test the kernel module a `vmm\_test` program was developed that wraps the
+ioctl commands into simple functions:
+
+```C
+int get_mem(int fd, int bytes)
+int free_mem(int fd, int idx)
+int write_mem(int fd, int idx, char *buf)
+int read_mem(int fd, int idx, char *buf, int size)
+```
+
+With these functions in place we can write a simple test program to exercise our module:
+
+```C
+int mem, ref;
+char buffer[4096];
+
+mem = open("/dev/vmm", 0);
+if (mem < 0) {
+    printf("Can't open device file\n");
+    exit(-1);
+}
+
+ref = get_mem(mem, 100);
+sprintf(buffer, "Hello buddy");
+write_mem(mem, ref, buffer);
+read_mem(mem, ref+3, buffer, 10);
+printf("buffer: %s\n", buffer);
+free_mem(mem, ref);
+```
+
+We can compile the test program with:
+
+```
+make vmm_test
+```
+
+Running it gives us our expected result:
+
+```
+% ./vmm_test
+buffer: lo buddy
+```
+
+Looking at `dmesg` we can also see some messages from our module that match our
+userspace result:
+
+```
+Feb 21 21:37:52 gentoo-vm kernel: vmm: allocating 100 bytes
+Feb 21 21:37:52 gentoo-vm kernel: vmm: setting idx to 0
+Feb 21 21:37:52 gentoo-vm kernel: wrote H to 0
+Feb 21 21:37:52 gentoo-vm kernel: wrote e to 1
+Feb 21 21:37:52 gentoo-vm kernel: wrote l to 2
+Feb 21 21:37:52 gentoo-vm kernel: wrote l to 3
+Feb 21 21:37:52 gentoo-vm kernel: wrote o to 4
+Feb 21 21:37:52 gentoo-vm kernel: wrote   to 5
+Feb 21 21:37:52 gentoo-vm kernel: wrote b to 6
+Feb 21 21:37:52 gentoo-vm kernel: wrote u to 7
+Feb 21 21:37:52 gentoo-vm kernel: wrote d to 8
+Feb 21 21:37:52 gentoo-vm kernel: wrote d to 9
+Feb 21 21:37:52 gentoo-vm kernel: wrote y to 10
+Feb 21 21:37:52 gentoo-vm kernel: vmm: wrote 11 bytes
+Feb 21 21:37:52 gentoo-vm kernel: vmm: setting idx to 3
+Feb 21 21:37:52 gentoo-vm kernel: vmm: setting read size to 10
+Feb 21 21:37:52 gentoo-vm kernel: vmm: read 10 bytes
+Feb 21 21:37:52 gentoo-vm kernel: vmm: freeing idx 0
+```
+
 Buddy Allocator Unit Tests
 --------------------------
 In order to test the buddy allocator and exercise edge conditions a user space
@@ -83,8 +154,8 @@ buddy_kill();
 ```
 
 The first argument of `alloc\_check()` tells how many bytes we want to
-allocate. The second argument is the expected index of the page. If buddy
-allocator returns a different index then the one we were expected the
+allocate. The second argument is the expected index of the page. If the buddy
+allocator returns a different index then the one we were expecting the
 `assert()` statement in `alloc\_check()` will fail to indicate the error.
 
 After adding our test to `buddy\_test.c` we can compile it with:
@@ -145,7 +216,8 @@ ALLOCED 1 BYTES |0,0,0,0,|4,|-,|-,-,|8,8,8,8,8,8,8,8,|
 ALLOCED 1 BYTES |0,0,0,0,|4,|5,|-,-,|8,8,8,8,8,8,8,8,|
 ```
 
-`buddy\_test.c` tests 19 situations that were determined to be valuable tests
-during development. Since the buddy allocator is dealing with allocating and freeing
-memory as it builds the tree it is highly beneficial to be able to test it like this
-in user space.
+The `buddy\_test` program exercises 19 situations that were determined to be
+valuable tests during development. Since the buddy allocator is dealing with
+allocating and freeing memory as it builds the tree it is highly beneficial to
+be able to test it like this in user space so we don't have to deal with kernel
+panics.
