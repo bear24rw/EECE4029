@@ -24,16 +24,16 @@ that the proper header files and memory allocation functions will be used
 
 The buddy allocator uses a binary tree where each node is in one of three
 states: `FREE`, `SPLIT`, or `ALLOC`.  Additionally, each node keeps track of
-its index into the memory pool `buddy\_pool` as well as its size. The
-`buddy\_init` function allocates a new pool of size `size` and initializes the
+its index into the memory pool `buddy_pool` as well as its size. The
+`buddy_init` function allocates a new pool of size `size` and initializes the
 head node of the tree.
 
-When attempting to allocate space with the `buddy\_alloc` function the tree is
+When attempting to allocate space with the `buddy_alloc` function the tree is
 traversed and free space is broken in half until the smallest space that will
 properly allocate the request is achieved. If space cannot be found the
 function returns -1 to indicate an error.
 
-When freeing a page with `buddy\_free` the tree is first traversed in all
+When freeing a page with `buddy_free` the tree is first traversed in all
 directions to the bottom leaf nodes. It then checks if the leaf node is
 associated with the page it is trying to free and if so marks it as `FREE` and
 returns 0 to indicate it was successful.  When it is recursing back up the tree
@@ -41,14 +41,14 @@ the children of nodes marked as `SPLIT` are checked to see if both are `FREE`.
 If both children are `FREE` they are deallocated and the parent node is marked
 as `FREE` to coalesce the space.
 
-The `buddy\_size` function returns the number of bytes until the end of the
+The `buddy_size` function returns the number of bytes until the end of the
 page.  For example if the page starts at index 0 and is 10 bytes long calling
-`buddy\_size(7)` will return 3. If the index does not fall in a page area it
+`buddy_size(7)` will return 3. If the index does not fall in a page area it
 returns -1.
 
-The `buddy\_kill` function traverses the whole tree and deallocates all nodes.
+The `buddy_kill` function traverses the whole tree and deallocates all nodes.
 
-The `buddy\_print` function draws out the pool for debugging purposes.
+The `buddy_print` function draws out the pool for debugging purposes.
 
 Kernel Module
 -------------
@@ -56,8 +56,8 @@ The kernel module uses the buddy allocator to initialize a fixed pool of kernel
 memory and then allocates and frees pages of this space using the buddy
 allocator through ioctrl's.
 
-The default pool size is set to (2^12)*(2^12) bytes, or 16,777,216 bytes. The
-pool size can be adjusted at load time using the `pool\_size` parameter. For
+The default pool size is set to (2^12)x(2^12) bytes, or 16,777,216 bytes. The
+pool size can be adjusted at load time using the `pool_size` parameter. For
 instance, to allocate a pool of 512 bytes:
 
 ```
@@ -86,7 +86,7 @@ IOCTL_READ
 Kernel Module Test
 ------------------
 In order to test the kernel module and exercise the ioctl's a user space
-program `vmm\_test` was developed that wraps the ioctl commands into simple
+program `vmm_test` was developed that wraps the ioctl commands into simple
 functions:
 
 ```C
@@ -156,7 +156,7 @@ Feb 21 21:37:52 gentoo-vm kernel: vmm: freeing idx 0
 Buddy Allocator Unit Tests
 --------------------------
 In order to test the buddy allocator and exercise various use cases a user
-space program called `buddy\_test` was developed that allows easy testing of
+space program called `buddy_test` was developed that allows easy testing of
 multiple scenarios.  For instance to allocate a pool of 16 bytes and then
 allocate two pages one being 2 bytes and the other being 4 bytes we can write:
 
@@ -168,12 +168,12 @@ alloc_check(4, 4);
 buddy_kill();
 ```
 
-The first argument of `alloc\_check` tells how many bytes we want to
+The first argument of `alloc_check` tells how many bytes we want to
 allocate. The second argument is the expected index of the page. If the buddy
 allocator returns a different index then the one we were expecting the
-`assert` statement in `alloc\_check` will fail to indicate the error.
+`assert` statement in `alloc_check` will fail to indicate the error.
 
-After adding our test to `buddy\_test.c` we can compile it with:
+After adding our test to `buddy_test.c` we can compile it with:
 
 ```
 make buddy_test
@@ -231,7 +231,7 @@ ALLOCED 1 BYTES |0,0,0,0,|4,|-,|-,-,|8,8,8,8,8,8,8,8,|
 ALLOCED 1 BYTES |0,0,0,0,|4,|5,|-,-,|8,8,8,8,8,8,8,8,|
 ```
 
-The `buddy\_test` program exercises 19 different situations that were
+The `buddy_test` program exercises 19 different situations that were
 determined to be valuable tests during development. Since the buddy allocator
 is dealing with allocating and freeing memory as it builds the tree it is
 highly beneficial to be able to test it like this in user space so we don't
