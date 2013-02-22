@@ -15,8 +15,8 @@ int buddy_init(int size);
 int buddy_alloc(int size);
 int buddy_free(int idx);
 int buddy_size(int idx);
-void buddy_print(void);
 void buddy_kill(void);
+void buddy_print(void);
 ```
 In order to compile for userspace you must define `NONKERNEL` when compiling so
 that the proper header files and memory allocation functions will be used
@@ -24,17 +24,31 @@ that the proper header files and memory allocation functions will be used
 
 The buddy allocator uses a binary tree where each node is in one of three
 states: `FREE`, `SPLIT`, or `ALLOC`.  Additionally, each node keeps track of
-its index into the memory pool `buddy\_pool` as well as its size.  When
-attempting to allocate space the tree is traversed and free space is broken in
-half until the smallest space that will properly allocate the request is
-achieved. If space cannot be found the function returns -1 to indicate an
-error. When freeing space the tree is first traversed in all directions to the
-bottom leaf nodes. It then checks if the leaf node is associated with the page
-it is trying to free and if so marks it as `FREE` and returns 0 to indicate it
-was successful.  When it is recursing back up the tree the children of nodes
-marked as `SPLIT` are checked to see if both are `FREE`.  If both children are
-`FREE` they are deallocated and the parent node is marked as `FREE` to coalesce
-the space.
+its index into the memory pool `buddy\_pool` as well as its size. The
+`buddy\_init` function allocates a new pool of size `size` and initializes the
+head node of the tree.
+
+When attempting to allocate space with the `buddy\_alloc` function the tree is
+traversed and free space is broken in half until the smallest space that will
+properly allocate the request is achieved. If space cannot be found the
+function returns -1 to indicate an error.
+
+When freeing a page with `buddy\_free` the tree is first traversed in all
+directions to the bottom leaf nodes. It then checks if the leaf node is
+associated with the page it is trying to free and if so marks it as `FREE` and
+returns 0 to indicate it was successful.  When it is recursing back up the tree
+the children of nodes marked as `SPLIT` are checked to see if both are `FREE`.
+If both children are `FREE` they are deallocated and the parent node is marked
+as `FREE` to coalesce the space.
+
+The `buddy\_size` function returns the number of bytes until the end of the
+page.  For example if the page starts at index 0 and is 10 bytes long calling
+`buddy\_size(7)` will return 3. If the index does not fall in a page area it
+returns -1.
+
+The `buddy\_kill` function traverses the whole tree and deallocates all nodes.
+
+The `buddy\_print` function draws out the pool for debugging purposes.
 
 Kernel Module
 -------------
