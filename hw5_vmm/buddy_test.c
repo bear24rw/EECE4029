@@ -7,7 +7,7 @@ void alloc_check(int bytes, int idx)
 {
     int rt = buddy_alloc(bytes);
     assert(rt == idx);
-    printf("ADDED %d BYTES\t|", bytes);
+    printf("ALLOCED %d BYTES\t|", bytes);
     buddy_print();
     if (rt < 0) printf("  <-- returned %d", rt);
     printf("\n");
@@ -220,6 +220,20 @@ int main(void)
     free_check(0, 0);
     size_check(0, -1);
     size_check(8, -1);
+    buddy_kill();
+
+    banner("non power 2");
+    buddy_init(16);
+    alloc_check(3, 0);
+    alloc_check(6, 8);
+    alloc_check(1, 4);
+    alloc_check(1, 5);
+    size_check(0, 4);
+    size_check(8, 8);
+    size_check(4, 1);
+    size_check(5, 1);
+    free_check(8, 0);
+    alloc_check(5, 8);
     buddy_kill();
 
     return 0;
