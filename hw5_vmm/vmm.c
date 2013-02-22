@@ -15,6 +15,9 @@
 #include "buddy.h"
 #include "vmm.h"
 
+int pool_size = DEFAULT_POOL_SIZE;
+module_param(pool_size, int, 0);
+
 int current_idx = 0;    /* currently selected page */
 int read_size = 0;      /* how many bytes to read when read ioctl is called */
 
@@ -137,13 +140,13 @@ static int __init init_mod(void)
     }
 
     /* initialize the buddy pool and tree */
-    ret = buddy_init(16);
+    ret = buddy_init(pool_size);
     if (ret < 0) {
         printk(KERN_INFO "vmm: could not allocate buddy pool\n");
         return -ENOMEM;
     }
 
-    printk(KERN_INFO "vmm: Module loaded successfully (device number: %d)\n", MAJOR_NUM);
+    printk(KERN_INFO "vmm: Module loaded successfully (device number: %d, pool size: %d)\n", MAJOR_NUM, pool_size);
     return 0;
 }
 
