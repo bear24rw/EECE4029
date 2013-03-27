@@ -812,14 +812,15 @@ struct fuse_operations bb_oper = {
 };
 
 void bb_usage() {
-    fprintf(stderr, "usage: bbfs [FUSE and mount options] rootDir mountPoint\n");
+    fprintf(stderr, "usage: bbfs [FUSE and mount options] rootDir mountPoint uid\n");
     abort();
 }
 
 /* argv should be as follows:
    argv[0] = the command bbfs
-   argv[argc-2] = the root directory
-   argv[argc-1] = the mount point
+   argv[argc-3] = the root directory
+   argv[argc-2] = the mount point
+   argv[argc-1] = uid
    */
 int main(int argc, char *argv[]) {
     int fuse_stat;
@@ -844,7 +845,7 @@ int main(int argc, char *argv[]) {
     // start with a hyphen (this will break if you actually have a
     // rootpoint or mountpoint whose name starts with a hyphen, but so
     // will a zillion other programs)
-    if ((argc < 3) || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
+    if ((argc < 4) || (argv[argc-3][0] == '-') || (argv[argc-2][0] == '-') || (argv[argc-1][0] == '-'))
         bb_usage();
 
     bb_data = malloc(sizeof(struct bb_state));
@@ -855,13 +856,20 @@ int main(int argc, char *argv[]) {
 
     // Pull the rootdir out of the argument list and save it in
     // bb_data->rootdir
-    bb_data->rootdir = realpath(argv[argc-2], NULL);
-    argv[argc-2] = argv[argc-1];
-    argv[argc-1] = NULL;
-    argc--;
+    bb_data->rootdir = realpath(argv[argc-3], NULL);
+    argv[argc-3] = argv[argc-2];
 
     // open the log file and save its handle
     bb_data->logfile = log_open();
+
+    // save the uid of the user that can encrypt and decrypt
+    bb_data->uid = atoi(argv[argc-1]);
+
+    // clear all arguments except for the rootdir so we can
+    // pass it to fuse_main
+    argv[argc-1] = NULL;
+    argv[argc-2] = NULL;
+    argc -= 2;
 
     // turn over control to fuse
     fprintf(stderr, "about to call fuse_main\n");
