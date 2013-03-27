@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
 
@@ -232,6 +233,12 @@ int bb_chmod(const char *path, mode_t mode) {
 
     log_msg("\nbb_chmod(fpath=\"%s\", mode=0%03o)\n", path, mode);
     bb_fullpath(fpath, path);
+
+    if (BB_DATA->uid != getuid()) {
+        time_t t = time(NULL);
+        log_msg("Illegal op by user %d on file %s %s\n", getuid(), path, ctime(&t));
+        return 0;
+    }
 
     retstat = chmod(fpath, mode);
     if (retstat < 0) retstat = bb_error("bb_chmod chmod");
