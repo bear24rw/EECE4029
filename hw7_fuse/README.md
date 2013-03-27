@@ -39,17 +39,13 @@ actually encrypted.
 23456Uijt!jt!b!uftu%
 ```
 
-If we mount the directory with a user id other than our own
+If we mount the directory with a user id other than our own and try to print
+out `test.txt` we can see that we were not allowed to decrypt it (since our uid
+does not match the uid that was specified when mounting)
 
 ```
 % fusermount -u mount_dir
 % ./bbfs test_dir mount_dir 1001
-```
-
-and try to print out `test.txt` we can see that we were not allowed to decrypt
-it (since our uid does not match the uid that was specified when mounting)
-
-```
 % cat mount_dir/test.txt
 23456Uijt!jt!b!uftu%
 ```
@@ -64,8 +60,8 @@ again our uid does not the one specified when mounting).
 This is not encrypted
 ```
 
-Additionally, if we try to change the permissions of a file we find that we are unable to
-and the attempt is recorded in the log file
+Additionally, if we try to change the permissions of a file we find that we are
+unable to so and the attempt is recorded in the log file
 
 ```
 % ll mount_dir/test.txt
