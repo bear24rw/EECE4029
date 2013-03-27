@@ -335,6 +335,7 @@ int bb_open(const char *path, struct fuse_file_info *fi) {
  */
 int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     int retstat = 0;
+    int i = 0;
 
     log_msg("\nbb_read(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n", path, buf, size, offset, fi);
     // no need to get fpath on this one, since I work from fi->fh not the path
@@ -347,7 +348,17 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
      * number of bytes read.
      */
     retstat = pread(fi->fh, buf, size, offset);
-    if (retstat < 0) retstat = bb_error("bb_read read");
+    if (retstat < 0) {
+        return bb_error("bb_read read");
+    }
+
+    // only decrypt if this user is the one that is allowed to
+    if (BB_DATA->uid == getuid()) {
+        for (i=0; i<retstat; i++) {
+            buf[i] = (buf[i] == 0) ? 255 : ((buf[i]-1) % 256);
+        }
+    }
+
     return retstat;
 }
 
@@ -364,12 +375,24 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 int bb_write(const char *path, const char *buf, size_t size, off_t offset,
         struct fuse_file_info *fi) {
     int retstat = 0;
+    int i = 0;
 
     log_msg("\nbb_write(path=\"%s\", buf=0x%08x, size=%d, offset=%lld, fi=0x%08x)\n", path, buf, size, offset, fi);
     // no need to get fpath on this one, since I work from fi->fh not the path
     log_fi(fi);
 
-    retstat = pwrite(fi->fh, buf, size, offset);
+    // get a mutable copy of the buffer
+    char *data = malloc(size);
+    memcpy(data, buf, size);
+
+    // encrypt all bytes
+    if (BB_DATA->uid == getuid()) {
+        for (i=0; i<size; i++) {
+            data[i] = (data[i] + 1) % 256;
+        }
+    }
+
+    retstat = pwrite(fi->fh, data, size, offset);
     if (retstat < 0) retstat = bb_error("bb_write pwrite");
     return retstat;
 }
